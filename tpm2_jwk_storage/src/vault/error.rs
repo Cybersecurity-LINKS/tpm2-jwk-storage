@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct TpmVault{
-    pub (crate) ctx: Mutex<Context>,
-    pub (crate) session: Arc<Option<AuthSession>>,
-    cache: RwLock<TpmObjectCache>  
+#[derive(Debug, thiserror::Error)]
+pub enum TpmVaultError{
+    #[error("The provided configuration is not correct: {0}")]
+    TpmConfigError(String)
 }

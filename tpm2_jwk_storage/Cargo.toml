@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tss-esapi = {version = "8.0.0-alpha", optional = true}
+thiserror = "2.0.12"
+tss-esapi = {git = "https://github.com/parallaxsecond/rust-tss-esapi", optional = true} # TODO: CHANGE WHEN VERSION 8.x compiles with no errors
 
 [features]
 tpm = ["dep:tss-esapi"]

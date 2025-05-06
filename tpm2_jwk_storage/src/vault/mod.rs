@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "tpm")]
-mod vault;
+mod tpm_vault;
+mod tpm_vault_config;
+mod error;
