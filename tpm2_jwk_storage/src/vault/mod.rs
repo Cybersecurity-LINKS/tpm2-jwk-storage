@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod tpm_vault;
-mod tpm_vault_config;
-mod error;
+pub mod tpm_vault;
+pub mod tpm_vault_config;
+pub mod error;

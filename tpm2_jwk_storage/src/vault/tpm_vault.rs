@@ -12,19 +12,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{error::TpmVaultError, tpm_vault_config::TPMConfig};
-/// Performs key management operation using TSS 2.0 ESAPI wrapper.
+use tss_esapi::Context;
+
+use super::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig};
+/// Performs key management operations using TSS 2.0 ESAPI wrapper.
 /// 
 /// It tries to connect to the TPM 2.0 pointed by the provided configuration
 pub struct TpmVault{
     //ctx: Mutex<Context>,
     //session: Arc<Option<AuthSession>>,
-    //cache: RwLock<TpmObjectCache>  
+    //cache: RwLock<TpmObjectCache>
+    /// Tpm configuration used for connection
+    config: TpmVaultConfig
 }
 
 impl TpmVault{
     /// Create a new instance with a given configuration
-    pub fn new(config: TPMConfig) -> Result<Self, TpmVaultError>{
-        Err(TpmVaultError::TpmConfigError(String::from("")))
+    /// ### Examples
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use std::str::FromStr;
+    /// 
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("device:/dev/tpmrm0").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// ```
+    pub fn new(config: TpmVaultConfig) -> Self {
+        TpmVault { config }
+    }
+
+    /// Retrieve random bytes from the TPM TRNG
+    /// ### Input
+    /// * `size` - Number of random bytes to generate
+    /// 
+    /// ### Output
+    /// `Vec<u8>` containing random bytes
+    /// 
+    /// ### Examples
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use std::str::FromStr;
+    /// 
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("device:/dev/tpmrm0").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// let random = vault.random(32);
+    /// ```
+    pub fn random(&self, size: usize) -> Result<Vec<u8>, TpmVaultError> {
+        let mut ctx = self.connect()?;
+        let random = ctx.get_random(size)?;
+        Ok(random.to_vec())
+    } 
+
+    fn connect(&self) -> Result<Context, TpmVaultError>{
+        Context::new(self.config.clone())
+            .map_err(|e| TpmVaultError::ConnectionError(e))
     }
 }

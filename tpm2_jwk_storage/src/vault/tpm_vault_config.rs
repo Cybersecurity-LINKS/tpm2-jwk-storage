@@ -12,55 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{ops::Deref, str::FromStr};
-
 use tss_esapi::Tcti;
 
-use super::error::TpmVaultError;
-
 /// Configuration Wrapper for the `TpmVault`
-pub struct TPMConfig(String);
-
-impl TryInto<Tcti> for TPMConfig {
-    type Error = TpmVaultError;
-    
-    fn try_into(self) -> Result<Tcti, Self::Error> {
-        Tcti::from_str(&self.0)
-        .map_err(|_| TpmVaultError::TpmConfigError(self.0))
-    }
-}
-
-impl Deref for TPMConfig{
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+pub type TpmVaultConfig = Tcti;
 
 #[cfg(test)]
 mod tests {
-    use tss_esapi::Tcti;
 
-    use super::TPMConfig;
+    use super::TpmVaultConfig;
+    use std::str::FromStr;
 
     #[test]
     fn device_config(){
-        let config = TPMConfig("device:/dev/tpm0".to_owned());
-        assert!(TryInto::<Tcti>::try_into(config).is_ok())
+        let config = TpmVaultConfig::from_str("device:/dev/tpm0");
+        assert!(config.is_ok())
     }
 
     #[test]
     fn sim_config(){
-        let config = TPMConfig("swtpm:host=127.0.0.1,port=2321".to_owned());
-        assert!(TryInto::<Tcti>::try_into(config).is_ok());
-        let config = TPMConfig("mssim:host=127.0.0.1,port=2321".to_owned());
-        assert!(TryInto::<Tcti>::try_into(config).is_ok());
+        let config = TpmVaultConfig::from_str("swtpm:host=127.0.0.1,port=2321");
+        assert!(config.is_ok());
+        let config = TpmVaultConfig::from_str("mssim:host=127.0.0.1,port=2321");
+        assert!(config.is_ok());
     }
 
     #[test]
     fn tabrmd_config(){
-        let config = TPMConfig("tabrmd".to_owned());
-        assert!(TryInto::<Tcti>::try_into(config).is_ok());
+        let config = TpmVaultConfig::from_str("tabrmd");
+        assert!(config.is_ok());
     }
 }

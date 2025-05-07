@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "tpm")]
-pub mod vault;
-pub mod types;
+/// Supported key types for creation of TPM key objects
+pub enum TpmKeyType{
+    EC(EcCurve)
+}
 
-#[cfg(test)]
-pub mod tests;
+/// Supported curves for EC key objects
+pub enum EcCurve {
+    P256
+}

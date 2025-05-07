@@ -1,11 +1,14 @@
 [package]
-name = "tpm2_jwk_storage"
+name = "tpm2-jwk-storage"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 thiserror = "2.0.12"
 tss-esapi = {git = "https://github.com/parallaxsecond/rust-tss-esapi", optional = true} # TODO: CHANGE WHEN VERSION 8.x compiles with no errors
+
+[dev-dependencies]
+testcontainers = "0.24.0"
 
 [features]
 tpm = ["dep:tss-esapi"]

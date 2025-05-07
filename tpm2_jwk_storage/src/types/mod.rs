@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub type TpmKeyId = [u8;32];
 #[cfg(feature = "tpm")]
-pub mod vault;
-pub mod types;
-
-#[cfg(test)]
-pub mod tests;
+pub mod tpm_key_type;
