@@ -15,3 +15,5 @@
 pub type TpmKeyId = [u8;32];
 #[cfg(feature = "tpm")]
 pub mod tpm_key_type;
+#[cfg(feature = "tpm")]
+pub mod output;

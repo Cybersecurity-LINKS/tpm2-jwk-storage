@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TpmVaultError{
     #[error("The provided configuration is not correct: {0}")]
     TpmConfigError(String),
@@ -20,6 +20,11 @@ pub enum TpmVaultError{
     #[error("Connection to the TPM 2.0 failed. Reason: {0}")]
     ConnectionError(tss_esapi::Error),
     #[error(transparent)]
-    TSSError(#[from] tss_esapi::Error)
-    
+    TSSError(#[from] tss_esapi::Error),
+    #[error("Bad input error for value {name} = {reason}. Reason: {reason}")]
+    InputError{name: String, value: String, reason: String},
+    #[error("The algorithm {0} is not supported")]
+    UnsupportedAlgorithm(String),
+    #[error("Key generation failed: {0}")]
+    KeyGenError(tss_esapi::Error)
 }

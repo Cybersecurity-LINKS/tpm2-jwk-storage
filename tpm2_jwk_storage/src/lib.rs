@@ -14,6 +14,7 @@
 
 #[cfg(feature = "tpm")]
 pub mod vault;
+
 pub mod types;
 
 #[cfg(test)]

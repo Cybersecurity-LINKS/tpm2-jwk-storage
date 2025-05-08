@@ -1,5 +1,3 @@
-// Copyright 2025 Fondazione LINKS
- 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,12 +10,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-pub mod tests{
-    use std::sync::LazyLock;
+use tss_esapi::{structures::Name, utils::PublicKey};
 
-    pub const TPM_SIMULATOR : LazyLock<()> = LazyLock::new(|| {});
+/// Representation of a signing key.
+/// 
+/// It is a wrapper over the [PublicKey] and [Name] object
+pub struct TpmSigningKey{
+    public_key: PublicKey,
+    name: Name
 }
 
-#[cfg(test)]
-mod connection;
+impl TpmSigningKey {
+    pub fn new(public_key: PublicKey, name: Name) -> Self{
+        TpmSigningKey{public_key, name}
+    }
+}
