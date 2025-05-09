@@ -26,5 +26,7 @@ pub enum TpmVaultError{
     #[error("The algorithm {0} is not supported")]
     UnsupportedAlgorithm(String),
     #[error("Key generation failed: {0}")]
-    KeyGenError(tss_esapi::Error)
+    KeyGenError(tss_esapi::Error),
+    #[error("The requested key was not found in the vault")]
+    KeyNotFound
 }

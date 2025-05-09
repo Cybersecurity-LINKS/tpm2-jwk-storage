@@ -10,7 +10,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use tss_esapi::{structures::Name, utils::PublicKey};
+use std::ops::Deref;
+
+use tss_esapi::{structures::{Name, Public, SavedTpmContext, Signature}, utils::PublicKey};
+
+use crate::vault::error::TpmVaultError;
 
 /// Representation of a signing key.
 /// 
@@ -23,5 +27,53 @@ pub struct TpmSigningKey{
 impl TpmSigningKey {
     pub fn new(public_key: PublicKey, name: Name) -> Self{
         TpmSigningKey{public_key, name}
+    }
+}
+
+/// Struct to contain cached objects in the TPM vault.
+/// 
+/// It contains a [SavedTpmContext] and its [Public] representation for better performances
+#[derive(Debug, Clone)]
+pub(crate) struct TpmCacheRecord{
+    ctx: SavedTpmContext,
+    public: Public
+}
+
+impl TpmCacheRecord {
+    pub(crate) fn new(ctx: SavedTpmContext, public: Public) -> Self {
+        TpmCacheRecord{ctx, public}
+    }
+
+    pub(crate) fn context(&self) -> SavedTpmContext{
+        self.ctx.clone()
+    }
+
+    pub(crate) fn public(&self) -> Public {
+        self.public.clone()
+    }
+}
+
+/// Digital signature representation of a 
+pub struct TpmSignature(Vec<u8>);
+
+impl TryFrom<Signature> for TpmSignature{
+    type Error = TpmVaultError;
+
+    fn try_from(value: Signature) -> Result<Self, Self::Error> {
+        match value {
+            Signature::EcDsa(sig) => Ok(TpmSignature(
+                [sig.signature_r().as_bytes(), 
+                sig.signature_s().as_bytes()]
+                .concat().to_vec())),
+            any => Err(TpmVaultError::UnsupportedAlgorithm(format!("{any:?}")))
+        }
+    }
+}
+
+impl Deref for TpmSignature{
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

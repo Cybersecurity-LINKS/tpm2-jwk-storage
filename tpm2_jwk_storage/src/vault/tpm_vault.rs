@@ -16,11 +16,11 @@ use std::{collections::HashMap, sync::RwLock};
 
 use tss_esapi::{attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SavedTpmContext}, utils::PublicKey, Context};
 
-use crate::types::{output::TpmSigningKey, tpm_key_type::TpmKeyType, TpmKeyId};
+use crate::types::{output::{TpmCacheRecord, TpmSignature, TpmSigningKey}, tpm_key_type::TpmKeyType, TpmKeyId};
 
-use super::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig, utils::get_object_name};
+use super::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig, utils::{self, get_object_name}};
 
-type TpmObjectCache = HashMap<TpmKeyId, SavedTpmContext>;
+type TpmObjectCache = HashMap<TpmKeyId, TpmCacheRecord>;
 /// Performs key management operations using TSS 2.0 ESAPI wrapper.
 /// 
 /// It tries to connect to the TPM 2.0 pointed by the provided configuration
@@ -91,7 +91,23 @@ impl TpmVault{
     /// ### Output
     /// If the execution is successful, a [TpmSigningKeyResult] is returned.
     /// Otherwise, a [TpmVaultError] is returned.
-    pub fn create_signing_key(&self, key_type: TpmKeyType, key_id: TpmKeyId) -> Result<TpmSigningKey, TpmVaultError>{
+    /// ### Example
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
+    /// use std::str::FromStr;
+    /// 
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// // Create a new key_id
+    /// let key_id = vault.random(32).unwrap()
+    ///     .try_into().unwrap();
+    /// 
+    /// // Create a new signing key and return public data
+    /// let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), key_id);
+    /// ```
+    pub fn create_signing_key(&self, key_type: TpmKeyType, key_id: &TpmKeyId) -> Result<TpmSigningKey, TpmVaultError>{
 
        // 1. Build the public template
        let attributes =  ObjectAttributes::new_fixed_signing_key();
@@ -107,7 +123,7 @@ impl TpmVault{
                 let hashing_alg = (&curve).get_hashing_alg();
                 let ec_param = PublicEccParametersBuilder::new_unrestricted_signing_key(
                     EccScheme::EcDsa(HashScheme::new(hashing_alg)), ec_curve).build()?;
-                let unique_parameter = EccParameter::from_bytes(&key_id)?;
+                let unique_parameter = EccParameter::from_bytes(key_id)?;
                 builder = builder.with_ecc_parameters(ec_param)
                     .with_ecc_unique_identifier(EccPoint::new(unique_parameter.clone(), unique_parameter))
                     .with_public_algorithm(PublicAlgorithm::Ecc);
@@ -126,7 +142,7 @@ impl TpmVault{
        let saved = ctx.context_save(primary.key_handle.into())?;
 
        let mut cache = self.cache.write().unwrap(); // should never be in error state. Ok to panic
-       cache.insert(key_id, saved);
+       cache.insert(key_id.clone(), TpmCacheRecord::new(saved, primary.out_public.clone()));
        // Unlock
        drop(cache);
 
@@ -136,6 +152,53 @@ impl TpmVault{
         .and_then(|name| Ok(Name::try_from(name)?))?;
        let public_key = PublicKey::try_from(primary.out_public)?;
        Ok(TpmSigningKey::new(public_key, name))
+    }
+
+    /// Create a digital signature with a signing key created by the TPM
+    /// ### Inputs
+    /// - `key_id`: [TpmKeyId] - The reference of the key to be used for signing
+    /// - `payload`: &[u8] - Message to be signed
+    /// ### Output
+    /// Returns a [TpmSignature] if successful, [TpmVaultError] otherwise.
+    /// ### Example
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
+    /// use std::str::FromStr;
+    /// 
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// // Create a new key_id
+    /// let key_id = b"deadbeefdeadbeefdeadbeefdeadbeef";
+    /// let payload = b"foo";
+    /// 
+    /// // Create a new signing key and return public data
+    /// let key = vault.tpm_sign(*key_id, payload);
+    /// ```
+    pub fn tpm_sign(&self, key_id: &TpmKeyId, payload: &[u8]) -> Result<TpmSignature, TpmVaultError>{
+
+        // Try to read the requested key
+        let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
+        let saved_key = cache.get(key_id)
+            .ok_or(TpmVaultError::KeyNotFound)?
+            .clone();
+        drop(cache);
+
+        let signature_scheme = utils::get_signature_scheme(&saved_key.public())?;
+
+        // Create digest
+        let digest = utils::digest(&signature_scheme, payload)?;
+
+        // Connect to the TPM and load the key
+        let mut ctx = self.connect()?;
+        let handle = ctx.context_load(saved_key.context())?;
+
+        let signature = ctx.execute_with_nullauth_session(|context| {
+            context.sign(handle.into(), Digest::from_bytes(&digest)?, signature_scheme, None)
+        })?;
+
+        Ok(TryInto::<TpmSignature>::try_into(signature)?)
     }
 
     /// Create a new Context using the configuration provided.
@@ -183,8 +246,61 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
-        let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), random.try_into().unwrap());
+        let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random).try_into().unwrap());
+        assert!(key.is_ok());
+    }
 
-        assert!(key.is_ok())
+    #[test]
+    fn test_100_keygen(){
+        let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+        let vault = TpmVault::new(config);
+
+        for i in 0..100 {
+            let random = vault.random(32).unwrap();
+            let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random).try_into().unwrap());
+            assert!(key.is_ok());
+            println!("Iter {i} OK!")
+        }
+    }
+
+    #[test]
+    fn test_sign(){
+        let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+        let vault = TpmVault::new(config);
+        let random = vault.random(32).unwrap();
+        let _ = vault
+            .create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random.clone()).try_into().unwrap())
+            .unwrap();
+
+        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo").unwrap();
+
+        let signature = signature.as_slice();
+        println!("{signature:?}");
+    }
+
+    #[test]
+    fn test_sign_no_keys(){
+        let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+        let vault = TpmVault::new(config);
+        let random = vault.random(32).unwrap();
+
+        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo");
+        assert_eq!(signature.err(), Some(TpmVaultError::KeyNotFound))
+    }
+
+    #[test]
+    fn test_100_sign(){
+        let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+        let vault = TpmVault::new(config);
+        let random = vault.random(32).unwrap();
+        let _ = vault
+            .create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random.clone()).try_into().unwrap())
+            .unwrap();
+
+        for i in 0..100{
+            let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo");
+            assert!(signature.is_ok());
+            println!("Iter {i} OK!")
+        }
     }
 }
