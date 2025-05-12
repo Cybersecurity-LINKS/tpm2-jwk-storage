@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 tpm2-jwk-storage ={ path = "../tpm2_jwk_storage"}
+identity_iota = "1.5.1"
 
 [[example]]
 path = "./src/foo.rs"
