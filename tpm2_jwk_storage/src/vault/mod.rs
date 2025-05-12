@@ -16,3 +16,5 @@ pub mod tpm_vault;
 pub mod tpm_vault_config;
 pub mod error;
 pub mod utils;
+#[cfg(feature = "iota")]
+pub mod jwk_storage;

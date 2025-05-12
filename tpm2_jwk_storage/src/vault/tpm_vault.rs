@@ -201,6 +201,67 @@ impl TpmVault{
         Ok(TryInto::<TpmSignature>::try_into(signature)?)
     }
 
+    /// Drop a key from the TPM vault. The key is removed from the in-memory cache of [TpmVault].
+    /// ### Inputs
+    /// - `key_id`: [TpmKeyId] - The reference of the key to be deleted
+    /// ### Output
+    /// Returns Ok(()) if successful, [TpmVaultError] otherwise.
+    /// ### Example
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
+    /// use std::str::FromStr;
+    ///
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// // Create a new key_id and a new signing key
+    /// let key_id = b"deadbeefdeadbeefdeadbeefdeadbeef";
+    /// vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), key_id).unwrap();
+    ///
+    /// // Delete the signing key
+    /// let key = vault.tpm_delete(&key_id);
+    /// ```
+    pub fn tpm_delete(&self, key_id: &TpmKeyId) -> Result<(), TpmVaultError>{
+        // Try to read the requested key
+        let mut cache = self.cache.write().unwrap(); // should never be in error state. Ok to panic
+        cache.remove(key_id)
+            .ok_or(TpmVaultError::KeyNotFound)?;
+        Ok(())
+    }
+
+    /// Check if a signing key exists in the vault
+    /// ### Inputs
+    /// - `key_id`: [TpmKeyId] - The reference of the key to be checked
+    /// ### Output
+    /// Returns true if the key exists, false otherwise.
+    /// ### Example
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
+    /// use std::str::FromStr;
+    ///
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// // Create a new key_id and a new signing key
+    /// let key_id = b"deadbeefdeadbeefdeadbeefdeadbeef";
+    /// vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), key_id).unwrap();
+    ///
+    /// // Check if the signing key exists
+    /// let exists = vault.contains(&key_id);
+    /// assert!(exists);
+    /// // Delete the signing key
+    /// vault.tpm_delete(&key_id).unwrap();
+    /// // Check if the signing key exists
+    /// let exists = vault.contains(&key_id);
+    /// assert!(!exists);
+    /// ```
+    pub fn contains(&self, key_id: &TpmKeyId) -> bool{
+        let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
+        cache.contains_key(key_id)
+    }
+
     /// Create a new Context using the configuration provided.
     fn connect(&self) -> Result<Context, TpmVaultError>{
         Context::new(self.config.clone())
