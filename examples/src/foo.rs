@@ -8,7 +8,7 @@ fn main(){
         let random = vault.random(32).unwrap();
         let start = Instant::now();
         // code to measure
-        let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), &random.try_into().unwrap()).unwrap();
+        let _ = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), &random.try_into().unwrap()).unwrap();
 
         let elapsed = start.elapsed();
         println!("Time taken: {:?}", elapsed);

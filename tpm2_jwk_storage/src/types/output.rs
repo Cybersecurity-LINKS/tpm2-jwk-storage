@@ -36,10 +36,10 @@ impl TpmSigningKey {
         TpmSigningKey{public_key, name, key_type}
     }
 
-    pub(crate) fn name(&self) -> Vec<u8>{
+    pub fn name(&self) -> Vec<u8>{
         self.name.value().to_vec()
     }
-    
+
     #[cfg(feature = "iota")]
     pub (crate) fn encode_jwk(&self, alg: &JwsAlgorithm) -> Result<Jwk, TpmVaultError>{
         use std::any::Any;

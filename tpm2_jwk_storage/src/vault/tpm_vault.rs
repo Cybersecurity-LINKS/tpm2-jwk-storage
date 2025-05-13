@@ -14,7 +14,7 @@
 
 use std::{collections::HashMap, sync::RwLock};
 
-use tss_esapi::{attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SavedTpmContext, SignatureScheme}, utils::PublicKey, Context};
+use tss_esapi::{attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme}, utils::PublicKey, Context};
 
 use crate::types::{output::{TpmCacheRecord, TpmSignature, TpmSigningKey}, tpm_key_type::TpmKeyType, TpmKeyId};
 
@@ -165,6 +165,7 @@ impl TpmVault{
     /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
     /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
     /// use std::str::FromStr;
+    /// use tss_esapi::{interface_types::algorithm::HashingAlgorithm, structures::{Digest, HashScheme, SignatureScheme}};
     /// 
     /// // Create a new TpmVault, connecting to a TPM 2.0 device
     /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
@@ -172,9 +173,12 @@ impl TpmVault{
     /// // Create a new key_id
     /// let key_id = b"deadbeefdeadbeefdeadbeefdeadbeef";
     /// let payload = b"foo";
+    /// let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), key_id).expect("Key not created");
     /// 
+    /// let name = key.name();
+    /// let scheme = SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
     /// // Create a new signing key and return public data
-    /// let key = vault.tpm_sign(*key_id, payload);
+    /// let key = vault.tpm_sign(key_id, payload, &name, scheme);
     /// ```
     pub fn tpm_sign(&self, key_id: &TpmKeyId, payload: &[u8], name: &[u8], scheme: SignatureScheme) -> Result<TpmSignature, TpmVaultError>{
 
@@ -185,10 +189,8 @@ impl TpmVault{
             .clone();
         drop(cache);
 
-        let signature_scheme = utils::get_signature_scheme(&saved_key.public())?;
-
         // Create digest
-        let digest = utils::digest(&signature_scheme, payload)?;
+        let digest = utils::digest(&scheme, payload)?;
 
         // Connect to the TPM and load the key
         let mut ctx = self.connect()?;
@@ -203,7 +205,7 @@ impl TpmVault{
             }
 
             // Sign with the loaded object
-            Ok(context.sign(handle.into(), Digest::from_bytes(&digest)?, signature_scheme, None)?)
+            Ok(context.sign(handle.into(), Digest::from_bytes(&digest)?, scheme, None)?)
         })?;
 
         Ok(TryInto::<TpmSignature>::try_into(signature)?)
