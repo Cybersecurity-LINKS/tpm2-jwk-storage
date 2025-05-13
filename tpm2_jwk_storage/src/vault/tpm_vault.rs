@@ -265,7 +265,7 @@ impl TpmVault{
     /// let exists = vault.contains(&key_id);
     /// assert!(!exists);
     /// ```
-    pub fn get(&self, key_id: &TpmKeyId) -> bool{
+    pub fn contains(&self, key_id: &TpmKeyId) -> bool{
         let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
         cache.contains_key(key_id)
     }

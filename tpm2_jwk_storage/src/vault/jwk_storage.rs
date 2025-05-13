@@ -111,12 +111,22 @@ impl JwkStorage for TpmVault {
     ///
     /// This operation cannot be undone. The keys are purged permanently.
     async fn delete(&self, key_id: &KeyId) -> KeyStorageResult<()>{
-        todo!()
+        let key_id: [u8;32] = decode_b64(key_id.as_str())
+            .ok()
+            .and_then(|kid| kid.first_chunk::<32>().copied())
+            .ok_or(KeyStorageError::new(KeyStorageErrorKind::KeyNotFound))?;
+        self.tpm_delete(&key_id)
+            .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::KeyNotFound).with_source(e))
     }
 
     /// Returns `true` if the key with the given `key_id` exists in storage, `false` otherwise.
     async fn exists(&self, key_id: &KeyId) -> KeyStorageResult<bool>{
-        todo!()
+        let key_id: [u8;32] = decode_b64(key_id.as_str())
+        .ok()
+        .and_then(|kid| kid.first_chunk::<32>().copied())
+        .ok_or(KeyStorageError::new(KeyStorageErrorKind::KeyNotFound))?;
+
+        Ok(self.contains(&key_id))
     }
 
 }
