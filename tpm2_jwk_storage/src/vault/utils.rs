@@ -58,3 +58,12 @@ pub(crate) fn get_signature_scheme(public: &Public) -> Result<tss_esapi::structu
             reason: "Unsupported public type".to_owned() })
     }
 }
+
+/// Retrieve the TPM object signature scheme from the JWK alg field
+#[cfg(feature = "iota")]
+pub(crate) fn get_signature_scheme_from_jwk(alg: &str) -> Result<SignatureScheme, TpmVaultError>{
+    match alg {
+        "ES256" => Ok(SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) }),
+        any => Err(TpmVaultError::UnsupportedScheme(any.to_owned()))
+    }
+}

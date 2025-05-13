@@ -25,8 +25,16 @@ pub enum TpmVaultError{
     InputError{name: String, value: String, reason: String},
     #[error("The algorithm {0} is not supported")]
     UnsupportedAlgorithm(String),
+    #[error("The scheme {0} is not supported")]
+    UnsupportedScheme(String),
     #[error("Key generation failed: {0}")]
     KeyGenError(tss_esapi::Error),
     #[error("The requested key was not found in the vault")]
-    KeyNotFound
+    KeyNotFound,
+    #[error("Key type {0} not supported")]
+    UnsupportedKeyType(String),
+    #[error("Cannot format object")]
+    FormatError,
+    #[error("Signature error: {0}")]
+    SignatureError(String)
 }

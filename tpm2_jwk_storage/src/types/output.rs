@@ -11,22 +11,57 @@
 // limitations under the License.
 
 use std::ops::Deref;
-
 use tss_esapi::{structures::{Name, Public, SavedTpmContext, Signature}, utils::PublicKey};
 
 use crate::vault::error::TpmVaultError;
+
+use super::{tpm_key_type::TpmKeyType};
+
+#[cfg(feature = "iota")]
+use identity_iota::verification::jws::JwsAlgorithm;        
+#[cfg(feature = "iota")]
+use identity_iota::verification::jwk::Jwk;
 
 /// Representation of a signing key.
 /// 
 /// It is a wrapper over the [PublicKey] and [Name] object
 pub struct TpmSigningKey{
     public_key: PublicKey,
-    name: Name
+    name: Name,
+    key_type: TpmKeyType
 }
 
 impl TpmSigningKey {
-    pub fn new(public_key: PublicKey, name: Name) -> Self{
-        TpmSigningKey{public_key, name}
+    pub fn new(public_key: PublicKey, name: Name, key_type: TpmKeyType) -> Self{
+        TpmSigningKey{public_key, name, key_type}
+    }
+
+    pub(crate) fn name(&self) -> Vec<u8>{
+        self.name.value().to_vec()
+    }
+    
+    #[cfg(feature = "iota")]
+    pub (crate) fn encode_jwk(&self, alg: &JwsAlgorithm) -> Result<Jwk, TpmVaultError>{
+        use std::any::Any;
+
+        use identity_iota::verification::{jwk::JwkParamsEc, jwu::encode_b64};
+
+        let mut jwk = match &self.public_key {
+            PublicKey::Ecc { x, y } => {
+                let mut params = JwkParamsEc::new();
+                params.x = encode_b64(x);
+                params.y = encode_b64(y);
+                params.crv = self.key_type.to_string();
+                Jwk::from_params(params)
+            },
+            pubkey => return Err(TpmVaultError::UnsupportedKeyType(format!("{:?}", pubkey.type_id())))
+        };
+
+        jwk.set_kid(encode_b64(self.name.value())); 
+        jwk.set_alg(alg.name());
+
+        jwk.to_public()
+        .ok_or(TpmVaultError::FormatError)
     }
 }
 
@@ -75,5 +110,11 @@ impl Deref for TpmSignature{
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl TpmSignature{
+    pub(crate) fn value(&self) -> Vec<u8>{
+        self.0.clone()
     }
 }

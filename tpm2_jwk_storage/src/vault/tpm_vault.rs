@@ -14,7 +14,7 @@
 
 use std::{collections::HashMap, sync::RwLock};
 
-use tss_esapi::{attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SavedTpmContext}, utils::PublicKey, Context};
+use tss_esapi::{attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SavedTpmContext, SignatureScheme}, utils::PublicKey, Context};
 
 use crate::types::{output::{TpmCacheRecord, TpmSignature, TpmSigningKey}, tpm_key_type::TpmKeyType, TpmKeyId};
 
@@ -151,7 +151,7 @@ impl TpmVault{
        let name = get_object_name(&primary.out_public)
         .and_then(|name| Ok(Name::try_from(name)?))?;
        let public_key = PublicKey::try_from(primary.out_public)?;
-       Ok(TpmSigningKey::new(public_key, name))
+       Ok(TpmSigningKey::new(public_key, name, key_type))
     }
 
     /// Create a digital signature with a signing key created by the TPM
@@ -176,7 +176,7 @@ impl TpmVault{
     /// // Create a new signing key and return public data
     /// let key = vault.tpm_sign(*key_id, payload);
     /// ```
-    pub fn tpm_sign(&self, key_id: &TpmKeyId, payload: &[u8]) -> Result<TpmSignature, TpmVaultError>{
+    pub fn tpm_sign(&self, key_id: &TpmKeyId, payload: &[u8], name: &[u8], scheme: SignatureScheme) -> Result<TpmSignature, TpmVaultError>{
 
         // Try to read the requested key
         let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
@@ -195,7 +195,15 @@ impl TpmVault{
         let handle = ctx.context_load(saved_key.context())?;
 
         let signature = ctx.execute_with_nullauth_session(|context| {
-            context.sign(handle.into(), Digest::from_bytes(&digest)?, signature_scheme, None)
+            // Verify that the key is correct, checking the object name
+            let obj_name = context.tr_get_name(handle)?;
+
+            if name.ne(obj_name.value()){
+                return Err(TpmVaultError::SignatureError("Name does not match".to_owned()));
+            }
+
+            // Sign with the loaded object
+            Ok(context.sign(handle.into(), Digest::from_bytes(&digest)?, signature_scheme, None)?)
         })?;
 
         Ok(TryInto::<TpmSignature>::try_into(signature)?)
@@ -257,7 +265,7 @@ impl TpmVault{
     /// let exists = vault.contains(&key_id);
     /// assert!(!exists);
     /// ```
-    pub fn contains(&self, key_id: &TpmKeyId) -> bool{
+    pub fn get(&self, key_id: &TpmKeyId) -> bool{
         let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
         cache.contains_key(key_id)
     }
@@ -271,7 +279,7 @@ impl TpmVault{
 
 #[cfg(test)]
 mod tests{
-    use tss_esapi::structures::Digest;
+    use tss_esapi::{interface_types::algorithm::HashingAlgorithm, structures::{Digest, HashScheme, SignatureScheme}};
 
     use crate::{types::tpm_key_type::{EcCurve, TpmKeyType}, vault::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig}};
     use std::str::FromStr;
@@ -329,11 +337,13 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
-        let _ = vault
+        let key = vault
             .create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random.clone()).try_into().unwrap())
             .unwrap();
 
-        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo").unwrap();
+        let name = key.name();
+        let scheme= SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
+        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo", &name, scheme).unwrap();
 
         let signature = signature.as_slice();
         println!("{signature:?}");
@@ -345,7 +355,9 @@ mod tests{
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
 
-        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo");
+        let scheme= SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
+
+        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo", &random, scheme);
         assert_eq!(signature.err(), Some(TpmVaultError::KeyNotFound))
     }
 
@@ -354,12 +366,14 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
-        let _ = vault
+        let key = vault
             .create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random.clone()).try_into().unwrap())
             .unwrap();
+        let name = key.name();
+        let scheme= SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
 
         for i in 0..100{
-            let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo");
+            let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo", &name, scheme);
             assert!(signature.is_ok());
             println!("Iter {i} OK!")
         }
