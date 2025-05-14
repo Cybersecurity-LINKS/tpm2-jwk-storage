@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, sync::RwLock};
+use std::{any, collections::HashMap, sync::RwLock};
 
-use tss_esapi::{attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme}, utils::PublicKey, Context};
+use tss_esapi::{abstraction::AsymmetricAlgorithmSelection, attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, ecc::EccCurve, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme}, traits::Marshall, utils::PublicKey, Context};
 
-use crate::types::{output::{TpmCacheRecord, TpmSignature, TpmSigningKey}, tpm_key_type::TpmKeyType, TpmKeyId};
+use crate::types::{output::{TpmCacheRecord, TpmSignature, TpmSigningKey}, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId};
 
 use super::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig, utils::{self, get_object_name}};
 
@@ -272,10 +272,75 @@ impl TpmVault{
         cache.contains_key(key_id)
     }
 
+    /// Retrieve the marshalled public template associated to a signing key
+    /// ### Inputs
+    /// - key_id: &[TpmKeyId] - The key identifier for the signing key
+    /// ### Output
+    /// An [Option<Vec<u8>>] containing a marshalled public template.
+    /// ### Example
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
+    /// use std::str::FromStr;
+    ///
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// // Create a new key_id and a new signing key
+    /// let key_id = b"deadbeefdeadbeefdeadbeefdeadbeef";
+    /// vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), key_id).unwrap();
+    ///
+    /// // Check if the signing key exists
+    /// let public = vault.get_public(&key_id);
+    /// assert!(public.is_some());
+    /// // Delete the signing key
+    /// vault.tpm_delete(&key_id).unwrap();
+    /// // Check if the signing key exists
+    /// let public = vault.get_public(&key_id);
+    /// assert!(public.is_none());
+    /// ```
+    pub fn get_public(&self, key_id: &TpmKeyId) -> Option<Vec<u8>>{
+        let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
+        cache.get(key_id)
+            .and_then(|rec| rec.public().marshall().ok())
+    }
     /// Create a new Context using the configuration provided.
     fn connect(&self) -> Result<Context, TpmVaultError>{
         Context::new(self.config.clone())
             .map_err(|e| TpmVaultError::ConnectionError(e))
+    }
+
+    /*-------------------------
+        CREDENTIAL PROTOCOL
+     --------------------------*/
+    /// Read the certificate of the Endorsement Key according to the [TCG EK Credential Profile](https://trustedcomputinggroup.org/wp-content/uploads/TCG-EK-Credential-Profile-for-TPM-Family-2.0-Level-0-Version-2.6_pub.pdf)
+    /// ### Inputs
+    /// - key_type: [TpmKeyType] - Endorsement Key Type
+    /// ### Output
+    /// DER encoded X.509 certificate, [TpmVaultError] otherwise
+    /// ### Example
+    /// ```rust
+    /// use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
+    /// use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
+    /// use std::str::FromStr;
+    ///
+    /// // Create a new TpmVault, connecting to a TPM 2.0 device
+    /// let config = TpmVaultConfig::from_str("tabrmd").unwrap();
+    /// let vault = TpmVault::new(config);
+    /// // Create a new key_id and a new signing key
+    /// let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), key_id).unwrap();
+    ///
+    /// // Delete the signing key
+    /// vault.ek_certificate(TpmKeyType::EC(EcCurve::P256)).unwrap();
+    /// ```
+    pub fn ek_certificate(&self, key_type: TpmKeyType) -> Result<Vec<u8>, TpmVaultError>{
+        let alg = match key_type {
+            TpmKeyType::EC(EcCurve::P256) => AsymmetricAlgorithmSelection::Ecc(EccCurve::NistP256),
+        };
+
+        let mut ctx = self.connect()?;
+        tss_esapi::abstraction::ek::retrieve_ek_pubcert(&mut ctx, alg)
+            .map_err(|e| {e.into()})
     }
 }
 
