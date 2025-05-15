@@ -19,7 +19,10 @@ pub enum TpmVaultError{
     #[cfg(feature = "tpm")]
     #[error("Connection to the TPM 2.0 failed. Reason: {0}")]
     ConnectionError(tss_esapi::Error),
+    #[error("Cannot create a valid session")]
+    SessionError,
     #[error(transparent)]
+    #[cfg(feature = "tpm")]
     TSSError(#[from] tss_esapi::Error),
     #[error("Bad input error for value {name} = {reason}. Reason: {reason}")]
     InputError{name: String, value: String, reason: String},
@@ -28,6 +31,7 @@ pub enum TpmVaultError{
     #[error("The scheme {0} is not supported")]
     UnsupportedScheme(String),
     #[error("Key generation failed: {0}")]
+    #[cfg(feature = "tpm")]
     KeyGenError(tss_esapi::Error),
     #[error("The requested key was not found in the vault")]
     KeyNotFound,

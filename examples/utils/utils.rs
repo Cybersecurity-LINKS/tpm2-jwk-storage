@@ -29,6 +29,12 @@ pub mod dtos;
 pub static API_ENDPOINT: &str = "https://api.testnet.iotaledger.net";
 pub static FAUCET_ENDPOINT: &str = "https://faucet.testnet.iotaledger.net/api/enqueue";
 
+pub const ISSUER_BASE_URL: &str = "http://127.0.0.1:3213/api";
+pub const VERIFIER_BASE_URL: &str = "http://127.0.0.1:3214/api";
+/// Persistent handle where the EK has been loaded before the execution.
+/// This address can be arbitrarily decided within the range of addresses for the Endorsement Hierarchy
+pub const EK_HANDLE: u32 = 0x81010001;
+
 #[derive(Debug)]
 pub struct UtilsError<'a>(Cow<'a, str>);
 

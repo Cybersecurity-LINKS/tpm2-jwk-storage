@@ -14,9 +14,10 @@
 
 use std::{any, collections::HashMap, sync::RwLock};
 
-use tss_esapi::{abstraction::AsymmetricAlgorithmSelection, attributes::ObjectAttributes, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, ecc::EccCurve, reserved_handles::Hierarchy}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme}, traits::Marshall, utils::PublicKey, Context};
+use tss_esapi::{abstraction::AsymmetricAlgorithmSelection, attributes::{ObjectAttributes, SessionAttributesBuilder}, constants::SessionType, handles::{AuthHandle, PersistentTpmHandle, SessionHandle, TpmHandle}, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, ecc::EccCurve, reserved_handles::Hierarchy, session_handles::PolicySession}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme, SymmetricDefinition}, traits::Marshall, utils::PublicKey, Context};
+use zeroize::{Zeroize, Zeroizing};
 
-use crate::types::{output::{TpmCacheRecord, TpmSignature, TpmSigningKey}, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId};
+use crate::types::{output::{TpmCacheRecord, TpmCredential, TpmSignature, TpmSigningKey}, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId};
 
 use super::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig, utils::{self, get_object_name}};
 
@@ -341,6 +342,78 @@ impl TpmVault{
         let mut ctx = self.connect()?;
         tss_esapi::abstraction::ek::retrieve_ek_pubcert(&mut ctx, alg)
             .map_err(|e| {e.into()})
+    }
+
+    pub fn activate_credential(&self, ek_handle: u32, credentialed_key: TpmKeyId, challenge: TpmCredential) -> Result<Zeroizing<Vec<u8>>, TpmVaultError>{
+        // Retrieve the cached key
+        let cache = self.cache.read()
+            .expect("Unexpected failure");
+
+        let key = cache.get(&credentialed_key)
+            .ok_or(TpmVaultError::KeyNotFound)
+            .cloned()?;
+        drop(cache);
+
+        // Load required objects
+        let ek_handle = TpmHandle::Persistent(PersistentTpmHandle::new(ek_handle)?);
+        let mut ctx = self.connect()?;
+        let key_handle = ctx.execute_with_nullauth_session(|context|
+            context.context_load(key.context())    
+        )?;
+        let ek_handle = ctx.tr_from_tpm_public(ek_handle)?;
+
+        // Generate a new authentication session to be used
+        let session = ctx.start_auth_session(
+            None, 
+            None, 
+            None, 
+            SessionType::Hmac, 
+            SymmetricDefinition::AES_128_CFB, 
+            HashingAlgorithm::Sha256)?
+            .ok_or(TpmVaultError::SessionError)?;
+
+        let (session_attributes, session_attributes_mask) = SessionAttributesBuilder::new()
+        .with_decrypt(true)
+        .with_encrypt(true)
+        .build();
+        ctx.tr_sess_set_attributes(session, session_attributes, session_attributes_mask)?;
+        
+        // Create policy auth session for EK
+        let (session_attributes, session_attributes_mask) = SessionAttributesBuilder::new().build();
+        let policy_auth_session = ctx
+        .start_auth_session(
+            None,
+            None,
+            None,
+            SessionType::Policy,
+            SymmetricDefinition::AES_128_CFB,
+            HashingAlgorithm::Sha256,
+        )?
+        .ok_or(TpmVaultError::SessionError)?;
+
+        ctx.tr_sess_set_attributes(policy_auth_session, session_attributes, session_attributes_mask)?;
+        ctx.execute_with_nullauth_session(|context| {
+            context.policy_secret(
+                PolicySession::try_from(policy_auth_session)?,
+                AuthHandle::Endorsement,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                None)
+        })?;
+
+        // execute activate credential to solve the challenge
+        let secret = ctx.execute_with_sessions((None, Some(policy_auth_session), None), |context|{
+            let result = context.activate_credential(key_handle.clone().into(), ek_handle.into(), challenge.id_object(), challenge.encrypted_secret());
+            result
+        })
+        .map(|digest| Zeroizing::new(digest.to_vec()))?;
+
+        // Cleanup
+        ctx.flush_context(SessionHandle::from(session).into())?;
+        ctx.flush_context(SessionHandle::from(policy_auth_session).into())?;
+
+        Ok(secret)
     }
 }
 
