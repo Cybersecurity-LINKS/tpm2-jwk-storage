@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{borrow::Cow, collections::VecDeque, error::Error, fmt::Display, fs::create_dir_all, ops::Deref, time::Duration};
+use std::{borrow::Cow, collections::VecDeque, error::Error, fmt::Display, fs::create_dir_all, time::Duration};
 
 use identity_iota::{iota::{IotaClientExt, IotaDocument, IotaIdentityClientExt, NetworkName}, storage::{JwkDocumentExt, JwkStorage, KeyIdStorage, KeyType, Storage}, verification::{jws::JwsAlgorithm, MethodScope}};
-use iota_sdk::{client::{api::GetAddressesOptions, node_api::indexer::query_parameters::QueryParameter, secret::SecretManager, Client}, crypto::keys::bip39::{self, Mnemonic}, types::block::{address::{Address, Bech32Address, Hrp}, output::AliasOutput}};
+use iota_sdk::{client::{api::GetAddressesOptions, node_api::indexer::query_parameters::QueryParameter, secret::SecretManager, Client}, types::block::{address::{Address, Bech32Address, Hrp}, output::AliasOutput}};
 use serde::{Deserialize, Serialize};
 
 pub mod dtos;
@@ -177,7 +177,7 @@ async fn request_faucet_funds(client: &Client, address: Bech32Address, faucet_en
     Ok::<(), Box<dyn Error>>(())
   })
   .await
-  .map_err(|e| UtilsError(Cow::Borrowed("Timeout")))??;
+  .map_err(|_| UtilsError(Cow::Borrowed("Timeout")))??;
 
   Ok(())
 }

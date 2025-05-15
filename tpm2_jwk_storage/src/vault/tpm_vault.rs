@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{any, collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, sync::RwLock};
 
 use tss_esapi::{abstraction::AsymmetricAlgorithmSelection, attributes::{ObjectAttributes, SessionAttributesBuilder}, constants::SessionType, handles::{AuthHandle, PersistentTpmHandle, SessionHandle, TpmHandle}, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, ecc::EccCurve, reserved_handles::Hierarchy, session_handles::PolicySession}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme, SymmetricDefinition}, traits::Marshall, utils::PublicKey, Context};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use crate::types::{output::{TpmCacheRecord, TpmCredential, TpmSignature, TpmSigningKey}, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId};
 

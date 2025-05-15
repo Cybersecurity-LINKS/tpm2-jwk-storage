@@ -32,7 +32,7 @@ async fn main() {
     for _ in 0..100{
       let start = Instant::now();
       // code to measure
-      let (mut _document, _fragment) = examples::create_did_document(&NetworkName::try_from("network").expect("Network not valid"), &storage)
+      let (mut _document, _fragment) = examples::create_did_document(&NetworkName::try_from("net").expect("Network not valid"), &storage)
         .await;
 
       let elapsed = start.elapsed();

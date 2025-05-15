@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use examples::{create_did, dtos::EncryptedCredentialResponse, write_to_csv, StorageType, TestName, API_ENDPOINT, EK_HANDLE};
-use identity_iota::{storage::{KeyIdMemstore, KeyIdStorage, KeyType, MethodDigest, Storage}, verification::jwu::decode_b64};
-use iota_sdk::client::{secret::{mnemonic::MnemonicSecretManager, SecretManager}, Client};
+use identity_iota::{storage::{KeyIdMemstore, KeyIdStorage, MethodDigest, Storage}, verification::jwu::decode_b64};
+use iota_sdk::client::{secret::SecretManager, Client};
 use josekit::jwe::alg::direct::DirectJweAlgorithm::Dir;
 use reqwest::multipart::{self, Part};
 use tpm2_jwk_storage::{types::{output::TpmCredential, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId}, vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig}};
@@ -43,7 +43,7 @@ async fn main(){
     let mut tx: usize = 0;
     let mut rx: usize = 0;
 
-    for _ in (0..100){
+    for _ in 0..100 {
         tx = 0;
         rx = 0;
 
@@ -62,7 +62,7 @@ async fn main(){
         let tpm_key_id = TpmKeyId::try_from(tpm_key_id).expect("key identifier format NOK");
         let marshalled_public = vault.get_public(&tpm_key_id)
             .expect("Public not found");
-        
+
         tx += certificate.len();
         tx += marshalled_public.len();
         tx += did.as_bytes().len();
