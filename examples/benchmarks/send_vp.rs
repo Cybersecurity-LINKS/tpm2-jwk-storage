@@ -28,7 +28,6 @@ use reqwest::multipart::{self, Part};
 use serde_json::json;
 use tpm2_jwk_storage::types::output::TpmCredential;
 use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
-use tpm2_jwk_storage::types::TpmKeyId;
 use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
 
 #[tokio::main]
@@ -62,8 +61,7 @@ async fn main(){
         .get_key_id(&MethodDigest::new(&holder_vm).expect("Incorrect verification method"))
         .await
         .expect("Cannot retrieve the key identifier");
-    let tpm_key_id = decode_b64(holder_key_id.as_str()).expect("key identifier format NOK");
-    let tpm_key_id = TpmKeyId::try_from(tpm_key_id).expect("key identifier format NOK");
+    let tpm_key_id = holder_key_id.try_into().expect("key identifier format NOK");
     let marshalled_public = vault.get_public(&tpm_key_id)
         .expect("Public not found");
 

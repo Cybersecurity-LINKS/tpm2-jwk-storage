@@ -35,6 +35,8 @@ pub const VERIFIER_BASE_URL: &str = "http://127.0.0.1:3214/api";
 /// This address can be arbitrarily decided within the range of addresses for the Endorsement Hierarchy
 pub const EK_HANDLE: u32 = 0x81010001;
 
+const TPM_SHA_256_ID: u16 = 0x000B;
+
 #[derive(Debug)]
 pub struct UtilsError<'a>(Cow<'a, str>);
 
@@ -214,4 +216,67 @@ pub async fn create_did(
   let document: IotaDocument = client.publish_did_output(secret_manager, alias_output).await?;
 
   Ok((address, document, fragment))
+}
+
+/// check attributes of a TPM object.
+/// Ensure that the received object has the attributes:
+/// - sign
+/// - fixedTpm
+/// - fixedParent
+#[cfg(feature = "tpm")]
+pub fn check_public_attributes(marshalled: &[u8]) -> Result<(), &'static str>{
+    use tss_esapi::{structures::Public, traits::UnMarshall};
+
+    // unmarshall
+    let public = Public::unmarshall(marshalled);
+
+    let attributes = match public {
+        Ok(public) => public.object_attributes(),
+        Err(_) => return Err("Unmarshalling failed")
+    };
+
+    if attributes.fixed_parent() &&
+        attributes.fixed_parent() &&
+        attributes.sign_encrypt(){
+            Ok(())
+    }
+    else {
+        Err("Attributes' validation failed")
+    }
+}
+
+/// Compute the object name from the marshalled public. 
+/// Only SHA-256 names supported for testing purposes
+#[cfg(feature = "tpm")]
+pub fn get_name_from_public(marshalled: &[u8]) -> Vec<u8> {
+    use sha2::{Digest, Sha256};
+
+    [&TPM_SHA_256_ID.to_be_bytes(), Sha256::digest(marshalled).as_slice()].concat()
+}
+
+/// Check if the tpm object corresponds to an EC public key
+#[cfg(feature = "tpm")]
+pub fn check_public_key(marshalled: &[u8], name: &[u8], x: &[u8], y: &[u8]) -> Result<(), &'static str>{
+    use tss_esapi::{structures::Public, traits::UnMarshall};
+
+    let computed_name = get_name_from_public(marshalled);
+
+    if computed_name.ne(name){
+        return Err("Computed name does not match");
+    }
+    
+    let public = Public::unmarshall(marshalled)
+        .map_err(|_| "Cannot serialize public")?;
+
+    match public {
+        Public::Ecc { object_attributes: _, name_hashing_algorithm: _, auth_policy: _, parameters: _, unique } => {
+            if unique.x().as_bytes().ne(x) ||
+                unique.y().as_bytes().ne(y){
+                    return Err("Public key does not match");
+                }
+
+        },
+        _ => unimplemented!("Not supported")
+    }
+    Ok(())
 }

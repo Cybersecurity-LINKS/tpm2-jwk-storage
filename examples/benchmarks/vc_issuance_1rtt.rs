@@ -17,7 +17,7 @@ use identity_iota::{storage::{KeyIdMemstore, KeyIdStorage, MethodDigest, Storage
 use iota_sdk::client::{secret::SecretManager, Client};
 use josekit::jwe::alg::direct::DirectJweAlgorithm::Dir;
 use reqwest::multipart::{self, Part};
-use tpm2_jwk_storage::{types::{output::TpmCredential, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId}, vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig}};
+use tpm2_jwk_storage::{types::{output::TpmCredential, tpm_key_type::{EcCurve, TpmKeyType}}, vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig}};
 use std::{collections::VecDeque, str::FromStr, time::{Duration, Instant}};
 
 #[tokio::main]
@@ -58,8 +58,7 @@ async fn main(){
             .get_key_id(&MethodDigest::new(&holder_vm).expect("Incorrect verification method"))
             .await
             .expect("Cannot retrieve the key identifier");
-        let tpm_key_id = decode_b64(holder_key_id.as_str()).expect("key identifier format NOK");
-        let tpm_key_id = TpmKeyId::try_from(tpm_key_id).expect("key identifier format NOK");
+        let tpm_key_id = holder_key_id.try_into().expect("key identifier format NOK");
         let marshalled_public = vault.get_public(&tpm_key_id)
             .expect("Public not found");
 

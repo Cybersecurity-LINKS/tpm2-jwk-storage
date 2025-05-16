@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
 members = [ "examples","tpm2_jwk_storage"]
+
+[workspace.dependencies]
+sha2 = "0.10.9"
+tss-esapi = {git = "https://github.com/parallaxsecond/rust-tss-esapi"} # TODO: CHANGE WHEN VERSION 8.x compiles with no errors

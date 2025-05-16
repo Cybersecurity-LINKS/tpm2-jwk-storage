@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sha2 = "0.10.9"
+sha2.workspace = true
 thiserror = "2.0.12"
-tss-esapi = {git = "https://github.com/parallaxsecond/rust-tss-esapi", optional = true} # TODO: CHANGE WHEN VERSION 8.x compiles with no errors
 identity_iota = {version = "1.5.1", optional = true}
 async-trait = {version = "0.1.88", optional = true}
 zeroize = {version = "1.8.1", optional = true}
+tss-esapi ={ workspace = true, optional = true}
 
 [features]
 tpm = ["dep:tss-esapi", "dep:zeroize"]

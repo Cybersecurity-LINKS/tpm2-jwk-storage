@@ -17,11 +17,11 @@ use std::{collections::HashMap, sync::RwLock};
 use tss_esapi::{abstraction::AsymmetricAlgorithmSelection, attributes::{ObjectAttributes, SessionAttributesBuilder}, constants::SessionType, handles::{AuthHandle, PersistentTpmHandle, SessionHandle, TpmHandle}, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, ecc::EccCurve, reserved_handles::Hierarchy, session_handles::PolicySession}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme, SymmetricDefinition}, traits::Marshall, utils::PublicKey, Context};
 use zeroize::Zeroizing;
 
-use crate::types::{output::{TpmCacheRecord, TpmCredential, TpmSignature, TpmSigningKey}, tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId};
+use crate::types::{output::{TpmCacheRecord, TpmCredential, TpmSignature, TpmSigningKey}, tpm_key_id::TpmKeyId, tpm_key_type::{EcCurve, TpmKeyType}};
 
 use super::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig, utils::{self, get_object_name}};
 
-type TpmObjectCache = HashMap<TpmKeyId, TpmCacheRecord>;
+type TpmObjectCache = HashMap<String, TpmCacheRecord>;
 /// Performs key management operations using TSS 2.0 ESAPI wrapper.
 /// 
 /// It tries to connect to the TPM 2.0 pointed by the provided configuration
@@ -124,7 +124,7 @@ impl TpmVault{
                 let hashing_alg = (&curve).get_hashing_alg();
                 let ec_param = PublicEccParametersBuilder::new_unrestricted_signing_key(
                     EccScheme::EcDsa(HashScheme::new(hashing_alg)), ec_curve).build()?;
-                let unique_parameter = EccParameter::from_bytes(key_id)?;
+                let unique_parameter = EccParameter::from_bytes(key_id.as_ref())?;
                 builder = builder.with_ecc_parameters(ec_param)
                     .with_ecc_unique_identifier(EccPoint::new(unique_parameter.clone(), unique_parameter))
                     .with_public_algorithm(PublicAlgorithm::Ecc);
@@ -143,7 +143,7 @@ impl TpmVault{
        let saved = ctx.context_save(primary.key_handle.into())?;
 
        let mut cache = self.cache.write().unwrap(); // should never be in error state. Ok to panic
-       cache.insert(key_id.clone(), TpmCacheRecord::new(saved, primary.out_public.clone()));
+       cache.insert(key_id.as_str().to_owned(), TpmCacheRecord::new(saved, primary.out_public.clone()));
        // Unlock
        drop(cache);
 
@@ -185,7 +185,7 @@ impl TpmVault{
 
         // Try to read the requested key
         let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
-        let saved_key = cache.get(key_id)
+        let saved_key = cache.get(key_id.as_str())
             .ok_or(TpmVaultError::KeyNotFound)?
             .clone();
         drop(cache);
@@ -236,7 +236,7 @@ impl TpmVault{
     pub fn tpm_delete(&self, key_id: &TpmKeyId) -> Result<(), TpmVaultError>{
         // Try to read the requested key
         let mut cache = self.cache.write().unwrap(); // should never be in error state. Ok to panic
-        cache.remove(key_id)
+        cache.remove(key_id.as_str())
             .ok_or(TpmVaultError::KeyNotFound)?;
         Ok(())
     }
@@ -270,7 +270,7 @@ impl TpmVault{
     /// ```
     pub fn contains(&self, key_id: &TpmKeyId) -> bool{
         let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
-        cache.contains_key(key_id)
+        cache.contains_key(key_id.as_str())
     }
 
     /// Retrieve the marshalled public template associated to a signing key
@@ -302,7 +302,7 @@ impl TpmVault{
     /// ```
     pub fn get_public(&self, key_id: &TpmKeyId) -> Option<Vec<u8>>{
         let cache = self.cache.read().unwrap(); // should never be in error state. Ok to panic
-        cache.get(key_id)
+        cache.get(key_id.as_str())
             .and_then(|rec| rec.public().marshall().ok())
     }
     /// Create a new Context using the configuration provided.
@@ -349,7 +349,7 @@ impl TpmVault{
         let cache = self.cache.read()
             .expect("Unexpected failure");
 
-        let key = cache.get(&credentialed_key)
+        let key = cache.get(credentialed_key.as_str())
             .ok_or(TpmVaultError::KeyNotFound)
             .cloned()?;
         drop(cache);

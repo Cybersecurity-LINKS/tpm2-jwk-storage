@@ -15,7 +15,7 @@
 use async_trait::async_trait;
 use identity_iota::{storage::{JwkGenOutput, JwkStorage, KeyId, KeyStorageError, KeyStorageErrorKind, KeyStorageResult, KeyType}, verification::{jwk::Jwk, jws::JwsAlgorithm, jwu::{decode_b64, encode_b64}}};
 
-use crate::types::{tpm_key_type::{EcCurve, TpmKeyType}, TpmKeyId};
+use crate::types::{tpm_key_id::TpmKeyId, tpm_key_type::{EcCurve, TpmKeyType}};
 
 use super::{tpm_vault::TpmVault, utils};
 
@@ -46,7 +46,7 @@ impl JwkStorage for TpmVault {
         // Generate a new keyId
         let key_id = self.random(32)
             .map_err(|_| KeyStorageError::new(KeyStorageErrorKind::Unavailable).with_custom_message("Cannot retrieve a new key id"))?;
-        let key_id = TpmKeyId::try_from(key_id)
+        let key_id = TpmKeyId::try_from(key_id.as_ref())
             .map_err(|_| KeyStorageError::new(KeyStorageErrorKind::Unspecified).with_custom_message("Cannot convert random into key id"))?;
 
         // Create a new signing key
@@ -81,10 +81,8 @@ impl JwkStorage for TpmVault {
     /// This is however based on the expectation that the key material associated with a given [`KeyId`] is immutable.  
     async fn sign(&self, key_id: &KeyId, data: &[u8], public_key: &Jwk) -> KeyStorageResult<Vec<u8>>{
         // Retrieve key id
-        let key_id: [u8;32] = decode_b64(key_id.as_str())
-            .ok()
-            .and_then(|kid| kid.first_chunk::<32>().copied())
-            .ok_or(KeyStorageError::new(KeyStorageErrorKind::KeyNotFound))?;
+        let key_id = key_id.clone().try_into()
+            .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::KeyNotFound).with_source(e))?;
 
         // Read required parameters from the JWK
         let alg = public_key.alg()
@@ -111,20 +109,17 @@ impl JwkStorage for TpmVault {
     ///
     /// This operation cannot be undone. The keys are purged permanently.
     async fn delete(&self, key_id: &KeyId) -> KeyStorageResult<()>{
-        let key_id: [u8;32] = decode_b64(key_id.as_str())
-            .ok()
-            .and_then(|kid| kid.first_chunk::<32>().copied())
-            .ok_or(KeyStorageError::new(KeyStorageErrorKind::KeyNotFound))?;
+        let key_id = key_id.clone().try_into()
+            .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::KeyNotFound).with_source(e))?;
+
         self.tpm_delete(&key_id)
             .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::KeyNotFound).with_source(e))
     }
 
     /// Returns `true` if the key with the given `key_id` exists in storage, `false` otherwise.
     async fn exists(&self, key_id: &KeyId) -> KeyStorageResult<bool>{
-        let key_id: [u8;32] = decode_b64(key_id.as_str())
-        .ok()
-        .and_then(|kid| kid.first_chunk::<32>().copied())
-        .ok_or(KeyStorageError::new(KeyStorageErrorKind::KeyNotFound))?;
+        let key_id = key_id.clone().try_into()
+            .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::KeyNotFound).with_source(e))?;
 
         Ok(self.contains(&key_id))
     }
