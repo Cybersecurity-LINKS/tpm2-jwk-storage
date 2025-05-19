@@ -403,7 +403,7 @@ impl TpmVault{
         })?;
 
         // execute activate credential to solve the challenge
-        let secret = ctx.execute_with_sessions((None, Some(policy_auth_session), None), |context|{
+        let secret = ctx.execute_with_sessions((Some(session), Some(policy_auth_session), None), |context|{
             let result = context.activate_credential(key_handle.clone().into(), ek_handle.into(), challenge.id_object(), challenge.encrypted_secret());
             result
         })
