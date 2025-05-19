@@ -22,6 +22,15 @@ use tpm2_jwk_storage::{types::{tpm_key_type::{EcCurve, TpmKeyType}, tpm_key_id::
 use std::{collections::HashMap, str::FromStr};
 use identity_ecdsa_verifier::EcDSAJwsVerifier;
 
+/*
+    The following example simulates the phases required to implement the trust triangle. The process has been customized to exploit TPM unique functionalities.
+    It proceeds as follows:
+    1. Holder requests a Verifiable Credential to a credential Issuer
+    2. The Issuer verifies the identity of the requester through a cryptographic challange. It can only be solved by a unique TPM device.
+    3. The Holder solves the challenge and receives a Verifiable Credential from the Issuer
+    4. The Holder includes the VC in a Verifiable Presentation and it sends it to the Verifier
+    5. The Verifier receives holder's VP and check presentation authenticity and credential validity
+ */
 #[tokio::main]
 async fn main(){
     // Setup the IOTA client
@@ -32,39 +41,47 @@ async fn main(){
         .await
         .expect("Client connection failed");
 
+    // Create an in memory secret manager for the issuer
     let mut secret_manager_issuer = Client::generate_mnemonic()
     .and_then(|mnemonic| SecretManager::try_from_mnemonic(mnemonic))
     .expect("Cannot create new secret manager");
 
     // Use the in-memory storage to store issuer keys
     let storage_issuer = Storage::new(JwkMemStore::new(), KeyIdMemstore::new());
-    // Issuer Identity
+    // Issuer publish a new DID on the configured network
     let (_, issuer_document, fragment_issuer): (Address, IotaDocument, String) = create_did(&client, &mut secret_manager_issuer, &storage_issuer, KeyType::new("Ed25519"), JwsAlgorithm::EdDSA).await
     .expect("Did publish: operation failed");
 
+    // Create an in memory secret manager for the holder
     let mut secret_manager_holder = Client::generate_mnemonic()
         .and_then(|mnemonic| SecretManager::try_from_mnemonic(mnemonic))
         .expect("Cannot create new secret manager");
 
+    // Configure the TpmVault for the holder
     let config = TpmVaultConfig::from_str("tabrmd")
         .expect("TPM Vault configuration not valid");
     let vault = TpmVault::new(config);
-    // Create a key storage for the holder using the TPM Vault
+    // Create a key storage for the holder using the TpmVault
     let storage_holder = Storage::new(vault, KeyIdMemstore::new());
     let vault = storage_holder.key_storage();
 
-    // Holder identity
+    // Holder publish a new DID on the configured network
     let (_, holder_document, fragment_holder): (Address, IotaDocument, String) =
-    examples::create_did(&client, &mut secret_manager_holder, &storage_holder, KeyType::new("P-256"), JwsAlgorithm::ES256).await
+    examples::create_did(&client, 
+        &mut secret_manager_holder, 
+        &storage_holder, KeyType::new("P-256"), 
+        JwsAlgorithm::ES256).await
         .expect("Did publish: operation failed");
-
+    
+    // Holder reads the X.509 certificate provided by the device vendor
     let _ek_certificate = vault.ek_certificate(TpmKeyType::EC(EcCurve::P256))
         .expect("Cannot read EK certificate");
 
+    // Retrieve the public template of the signing key generated during DID document publication
     let mut vm_address = DIDUrl::new(holder_document.id().clone().into(), None);
     vm_address
         .set_fragment(Some(&fragment_holder))
-        .expect("bad did url");
+        .expect("Bad did url");
     let vm = holder_document.resolve_method(vm_address, Some(MethodScope::VerificationMethod))
         .and_then(|method| MethodDigest::new(method).ok())
         .expect("Verification method digest not computed");
@@ -84,11 +101,11 @@ async fn main(){
     */
 
     /*
-        The issuer should verify the EK certificate. If the certificate is not valid, the VC issuance should fail
+        The Issuer should verify the EK certificate. If the certificate is not valid, the VC issuance should fail
     */
 
     /*
-        The issuer needs to validate the public template as well, in order to check that the TPM object satisfies the desired policy.
+        The Issuer needs to validate the public template as well, in order to check that the TPM object satisfies the desired policy.
         For instance, in order to have a key that cannot be exported outside of the TPM, the object attributes should be:
         - fixedTpm
         - fixedParent
@@ -98,7 +115,7 @@ async fn main(){
         .expect("Key validation failed");
 
 
-    // Set the subject
+    // Set the credential subject
     let jwk = holder_document.methods(None)[0].data().public_key_jwk().expect("Not a jwk");
     let kid = jwk.kid()
         .and_then(|name| decode_b64(name).ok())
@@ -110,10 +127,12 @@ async fn main(){
     let x = decode_b64(parameters.x.as_bytes()).expect("Cannot decode jwk ec parameters");
     let y = decode_b64(parameters.y.as_bytes()).expect("Cannot decode jwk ec parameters");
     
-    // check name
+    // check that the public template name corresponds to the name kid included in the did document
     examples::check_public_key(&key_public_object, &kid, &x, &y)
         .expect("Key verification failed");
-
+    
+    // Include the digest of the public key in the credential subject.
+    // It is necessary to specify which key has been verified by the issuer
     let subject = Subject::from_json_value(
         json!({
             "id": holder_document.id().as_str(),
@@ -186,6 +205,9 @@ async fn main(){
         .validate(&presentation_jwt, &holder, &presentation_validation_options)
         .expect("Presentation validation failed");
     
+    println!("VP signature verified");
+
+    // Validate the list of verifiable credentials
     let jwt_credentials: &Vec<Jwt> = &presentation.presentation.verifiable_credential;
     let issuers: Vec<CoreDID> = jwt_credentials
     .iter()
@@ -202,15 +224,15 @@ async fn main(){
         .subject_holder_relationship(holder_did.to_url().into(), SubjectHolderRelationship::AlwaysSubject);
 
   for (index, jwt_vc) in jwt_credentials.iter().enumerate() {
-    // SAFETY: Indexing should be fine since we extracted the DID from each credential and resolved it.
     let issuer_document: &IotaDocument = &issuers_documents[&issuers[index]];
 
     let _decoded_credential: DecodedJwtCredential<Object> = credential_validator
       .validate::<_, Object>(jwt_vc, issuer_document, &validation_options, FailFast::FirstError)
       .unwrap();
 
+    // Custom validation for credential issued for TPM generated keys
     if _decoded_credential.credential.types.contains(&String::from_str("TpmCredential").unwrap()) {
-        // if the type is TpmCredential I can check the signing key
+        // if the type is TpmCredential I can check the signing key, ensuring that the singing key used to produce the VP is the same verified by the issuer
         let digest = _decoded_credential.credential.credential_subject[0].properties.get("sha256")
             .expect("Key digest not found")
             .as_str()
