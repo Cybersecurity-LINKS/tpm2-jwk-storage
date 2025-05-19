@@ -15,7 +15,7 @@
 use std::{collections::VecDeque, time::{Duration, Instant}};
 
 use examples::{write_to_csv, StorageType, TestName};
-use identity_iota::{iota::NetworkName, storage::{KeyIdMemstore, Storage}};
+use identity_iota::{iota::NetworkName, storage::{KeyIdMemstore, KeyType, Storage}, verification::jws::JwsAlgorithm};
 use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
 use std::str::FromStr;
 
@@ -32,7 +32,7 @@ async fn main() {
     for _ in 0..100{
       let start = Instant::now();
       // code to measure
-      let (mut _document, _fragment) = examples::create_did_document(&NetworkName::try_from("net").expect("Network not valid"), &storage)
+      let (mut _document, _fragment) = examples::create_did_document(&NetworkName::try_from("net").expect("Network not valid"), &storage, KeyType::new("P-256"), JwsAlgorithm::ES256)
         .await;
 
       let elapsed = start.elapsed();

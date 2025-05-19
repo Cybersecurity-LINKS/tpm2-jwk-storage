@@ -14,7 +14,7 @@
 
 use examples::{create_did, API_ENDPOINT};
 use identity_eddsa_verifier::EdDSAJwsVerifier;
-use identity_iota::{core::{Duration, FromJson, Object, Timestamp, Url}, credential::{Credential, CredentialBuilder, DecodedJwtCredential, DecodedJwtPresentation, FailFast, Jwt, JwtCredentialValidationOptions, JwtCredentialValidator, JwtCredentialValidatorUtils, JwtPresentationOptions, JwtPresentationValidationOptions, JwtPresentationValidator, JwtPresentationValidatorUtils, Presentation, PresentationBuilder, Subject, SubjectHolderRelationship}, did::{CoreDID, DIDUrl, DID}, document::verifiable::JwsVerificationOptions, iota::IotaDocument, prelude::Resolver, storage::{JwkDocumentExt, JwkMemStore, JwsSignatureOptions, KeyIdMemstore, KeyIdStorage, MethodDigest, Storage}, verification::{jwu::{decode_b64, encode_b64}, MethodScope}};
+use identity_iota::{core::{Duration, FromJson, Object, Timestamp, Url}, credential::{Credential, CredentialBuilder, DecodedJwtCredential, DecodedJwtPresentation, FailFast, Jwt, JwtCredentialValidationOptions, JwtCredentialValidator, JwtCredentialValidatorUtils, JwtPresentationOptions, JwtPresentationValidationOptions, JwtPresentationValidator, JwtPresentationValidatorUtils, Presentation, PresentationBuilder, Subject, SubjectHolderRelationship}, did::{CoreDID, DIDUrl, DID}, document::verifiable::JwsVerificationOptions, iota::IotaDocument, prelude::Resolver, storage::{JwkDocumentExt, JwkMemStore, JwsSignatureOptions, KeyIdMemstore, KeyIdStorage, KeyType, MethodDigest, Storage}, verification::{jws::JwsAlgorithm, jwu::{decode_b64, encode_b64}, MethodScope}};
 use iota_sdk::{client::{secret::SecretManager, Client}, types::block::address::Address};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -39,7 +39,7 @@ async fn main(){
     // Use the in-memory storage to store issuer keys
     let storage_issuer = Storage::new(JwkMemStore::new(), KeyIdMemstore::new());
     // Issuer Identity
-    let (_, issuer_document, fragment_issuer): (Address, IotaDocument, String) = create_did(&client, &mut secret_manager_issuer, &storage_issuer).await
+    let (_, issuer_document, fragment_issuer): (Address, IotaDocument, String) = create_did(&client, &mut secret_manager_issuer, &storage_issuer, KeyType::new("Ed25519"), JwsAlgorithm::EdDSA).await
     .expect("Did publish: operation failed");
 
     let mut secret_manager_holder = Client::generate_mnemonic()
@@ -55,7 +55,7 @@ async fn main(){
 
     // Holder identity
     let (_, holder_document, fragment_holder): (Address, IotaDocument, String) =
-    examples::create_did(&client, &mut secret_manager_holder, &storage_holder).await
+    examples::create_did(&client, &mut secret_manager_holder, &storage_holder, KeyType::new("P-256"), JwsAlgorithm::ES256).await
         .expect("Did publish: operation failed");
 
     let _ek_certificate = vault.ek_certificate(TpmKeyType::EC(EcCurve::P256))

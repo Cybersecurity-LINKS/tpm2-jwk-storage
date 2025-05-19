@@ -20,7 +20,8 @@ use examples::{create_did, write_to_csv, StorageType, TestName, API_ENDPOINT, EK
 use identity_iota::core::{Timestamp, ToJson};
 use identity_iota::credential::{Jwt, JwtPresentationOptions, Presentation, PresentationBuilder};
 use identity_iota::did::DID;
-use identity_iota::storage::{JwkDocumentExt, JwsSignatureOptions, KeyIdMemstore, KeyIdStorage, MethodDigest, Storage};
+use identity_iota::storage::{JwkDocumentExt, JwsSignatureOptions, KeyIdMemstore, KeyIdStorage, KeyType, MethodDigest, Storage};
+use identity_iota::verification::jws::JwsAlgorithm;
 use identity_iota::verification::jwu::decode_b64;
 use iota_sdk::client::{secret::SecretManager, Client};
 use josekit::jwe::alg::direct::DirectJweAlgorithm::Dir;
@@ -46,7 +47,7 @@ async fn main(){
     let storage = Storage::new(TpmVault::new(config), KeyIdMemstore::new());
     let vault = storage.key_storage();
 
-    let (_, document, fragment) = create_did(&client, &mut mnemonic, &storage).await
+    let (_, document, fragment) = create_did(&client, &mut mnemonic, &storage, KeyType::new("P-256"), JwsAlgorithm::ES256).await
         .expect("Publish did failed");
     let did = document.id().to_string();
 

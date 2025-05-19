@@ -110,6 +110,8 @@ pub fn write_to_csv(name: TestName, storage: StorageType, tx: usize, rx: usize, 
 pub async fn create_did_document(
     network: &NetworkName,
   storage: &Storage<impl JwkStorage, impl KeyIdStorage>,
+  key_type: KeyType,
+  alg: JwsAlgorithm
 ) -> (IotaDocument, String) 
   {
   let mut document: IotaDocument = IotaDocument::new(network);
@@ -117,8 +119,8 @@ pub async fn create_did_document(
   let fragment: String = document
     .generate_method(
         storage,
-        KeyType::new("P-256"),
-        JwsAlgorithm::ES256,
+        key_type,
+        alg,
         None,
         MethodScope::VerificationMethod,
     )
@@ -202,6 +204,8 @@ pub async fn create_did(
   client: &Client,
   secret_manager: &mut SecretManager,
   storage: &Storage<impl JwkStorage, impl KeyIdStorage>,
+  key_type: KeyType,
+  alg: JwsAlgorithm
 ) -> Result<(Address, IotaDocument, String), Box<dyn Error>> {
   let address: Address = crate::get_address_with_funds(client, secret_manager, crate::FAUCET_ENDPOINT)
     .await
@@ -209,7 +213,7 @@ pub async fn create_did(
 
   let network_name: NetworkName = client.network_name().await?;
 
-  let (document, fragment): (IotaDocument, String) = create_did_document(&network_name, storage).await;
+  let (document, fragment): (IotaDocument, String) = create_did_document(&network_name, storage, key_type, alg).await;
 
   let alias_output: AliasOutput = client.new_did_output(address, document, None).await?;
 

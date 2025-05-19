@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use examples::{create_did, dtos::{CredentialReponse, EncryptedCredentialResponse, TpmCredentialRequest}, write_to_csv, StorageType, TestName, API_ENDPOINT, EK_HANDLE};
-use identity_iota::{core::ToJson, storage::{KeyIdMemstore, KeyIdStorage, MethodDigest, Storage}, verification::jwu::{decode_b64, encode_b64}};
+use identity_iota::{core::ToJson, storage::{KeyIdMemstore, KeyIdStorage, KeyType, MethodDigest, Storage}, verification::{jws::JwsAlgorithm, jwu::{decode_b64, encode_b64}}};
 use iota_sdk::client::{secret::SecretManager, Client};
 use reqwest::multipart::{self, Part};
 use tpm2_jwk_storage::{types::{output::TpmCredential, tpm_key_type::{EcCurve, TpmKeyType}}, vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig}};
@@ -37,7 +37,7 @@ async fn main(){
     let mut results = VecDeque::<Duration>::with_capacity(100);
     let vault = storage.key_storage();
 
-    let (_, document, _) = create_did(&client, &mut mnemonic, &storage).await
+    let (_, document, _) = create_did(&client, &mut mnemonic, &storage, KeyType::new("P-256"), JwsAlgorithm::ES256).await
         .expect("Publish did failed");
     let did = document.id().to_string();
     let mut tx: usize = 0;

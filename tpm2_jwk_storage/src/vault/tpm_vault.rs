@@ -421,7 +421,7 @@ impl TpmVault{
 mod tests{
     use tss_esapi::{interface_types::algorithm::HashingAlgorithm, structures::{Digest, HashScheme, SignatureScheme}};
 
-    use crate::{types::tpm_key_type::{EcCurve, TpmKeyType}, vault::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig}};
+    use crate::{types::{tpm_key_id::TpmKeyId, tpm_key_type::{EcCurve, TpmKeyType}}, vault::{error::TpmVaultError, tpm_vault_config::TpmVaultConfig}};
     use std::str::FromStr;
 
     use super::TpmVault;
@@ -455,7 +455,8 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
-        let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random).try_into().unwrap());
+        let id = TpmKeyId::try_from(random.as_slice()).unwrap();
+        let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), &id);
         assert!(key.is_ok());
     }
 
@@ -466,7 +467,9 @@ mod tests{
 
         for i in 0..100 {
             let random = vault.random(32).unwrap();
-            let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random).try_into().unwrap());
+            let id = TpmKeyId::try_from(random.as_slice()).unwrap();
+
+            let key = vault.create_signing_key(TpmKeyType::EC(EcCurve::P256), &id);
             assert!(key.is_ok());
             println!("Iter {i} OK!")
         }
@@ -477,13 +480,16 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
+        let id = TpmKeyId::try_from(random.as_slice()).unwrap();
+
         let key = vault
-            .create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random.clone()).try_into().unwrap())
+            .create_signing_key(TpmKeyType::EC(EcCurve::P256), &id)
             .unwrap();
+        let id = TpmKeyId::try_from(random.as_slice()).unwrap();
 
         let name = key.name();
         let scheme= SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
-        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo", &name, scheme).unwrap();
+        let signature = vault.tpm_sign(&id, b"foo", &name, scheme).unwrap();
 
         let signature = signature.as_slice();
         println!("{signature:?}");
@@ -494,10 +500,11 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
+        let id = TpmKeyId::try_from(random.as_slice()).unwrap();
 
         let scheme= SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
 
-        let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo", &random, scheme);
+        let signature = vault.tpm_sign(&id, b"foo", &random, scheme);
         assert_eq!(signature.err(), Some(TpmVaultError::KeyNotFound))
     }
 
@@ -506,14 +513,16 @@ mod tests{
         let config = TpmVaultConfig::from_str("tabrmd").unwrap();
         let vault = TpmVault::new(config);
         let random = vault.random(32).unwrap();
+        let id = TpmKeyId::try_from(random.as_slice()).unwrap();
+
         let key = vault
-            .create_signing_key(TpmKeyType::EC(EcCurve::P256), (*random.clone()).try_into().unwrap())
+            .create_signing_key(TpmKeyType::EC(EcCurve::P256), &id)
             .unwrap();
         let name = key.name();
         let scheme= SignatureScheme::EcDsa { scheme: HashScheme::new(HashingAlgorithm::Sha256) };
 
         for i in 0..100{
-            let signature = vault.tpm_sign((*random.clone()).try_into().unwrap(), b"foo", &name, scheme);
+            let signature = vault.tpm_sign(&id, b"foo", &name, scheme);
             assert!(signature.is_ok());
             println!("Iter {i} OK!")
         }
