@@ -208,6 +208,25 @@ async fn main(){
     let _decoded_credential: DecodedJwtCredential<Object> = credential_validator
       .validate::<_, Object>(jwt_vc, issuer_document, &validation_options, FailFast::FirstError)
       .unwrap();
+
+    if _decoded_credential.credential.types.contains(&String::from_str("TpmCredential").unwrap()) {
+        // if the type is TpmCredential I can check the signing key
+        let digest = _decoded_credential.credential.credential_subject[0].properties.get("sha256")
+            .expect("Key digest not found").to_string();
+
+        let jwk = holder.methods(None)[0].data().public_key_jwk()
+            .expect("Jwk not found")
+            .try_ec_params()
+            .expect("EC params not found");
+
+        let x = decode_b64(jwk.x.clone()).expect("Decode error");
+        let y = decode_b64(jwk.y.clone()).expect("Decode error");
+
+        let computed = Sha256::digest([x,y].concat());
+
+        assert_eq!(encode_b64(computed), digest)
+
+    }
   }
 
   println!("VP successfully validated: {:#?}", presentation);
