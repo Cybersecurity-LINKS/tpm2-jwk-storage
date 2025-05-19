@@ -212,7 +212,9 @@ async fn main(){
     if _decoded_credential.credential.types.contains(&String::from_str("TpmCredential").unwrap()) {
         // if the type is TpmCredential I can check the signing key
         let digest = _decoded_credential.credential.credential_subject[0].properties.get("sha256")
-            .expect("Key digest not found").to_string();
+            .expect("Key digest not found")
+            .as_str()
+            .expect("Digest not found");
 
         let jwk = holder.methods(None)[0].data().public_key_jwk()
             .expect("Jwk not found")
