@@ -113,7 +113,7 @@ async fn main(){
         let expires: Timestamp = Timestamp::now_utc().checked_add(identity_iota::core::Duration::minutes(10)).unwrap();
         //create a new presentation starting from the VC
         let presentation: Presentation<Jwt> = PresentationBuilder::new(document.id().to_url().into(), Default::default())
-            .credential(Jwt::from(vc_jwt.to_string()))
+            .credential(Jwt::from(vc_jwt.as_str().expect("JWT is not a string")))
             .build()
             .expect("Cannot create the Verifiable Presentation");
 
