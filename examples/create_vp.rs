@@ -114,13 +114,6 @@ async fn main(){
     examples::check_public_attributes(&key_public_object)
         .expect("Key validation failed");
 
-
-    // Set the credential subject
-    let jwk = holder_document.methods(None)[0].data().public_key_jwk().expect("Not a jwk");
-    let kid = jwk.kid()
-        .and_then(|name| decode_b64(name).ok())
-        .expect("Cannot decode key identifier from jwk");
-
     let parameters = jwk.try_ec_params().ok()
         .expect("Cannot find parameters");
 
@@ -130,6 +123,12 @@ async fn main(){
     // check that the public template name corresponds to the name kid included in the did document
     examples::check_public_key(&key_public_object, &kid, &x, &y)
         .expect("Key verification failed");
+    
+    // Set the credential subject
+    let jwk = holder_document.methods(None)[0].data().public_key_jwk().expect("Not a jwk");
+    let kid = jwk.kid()
+        .and_then(|name| decode_b64(name).ok())
+        .expect("Cannot decode key identifier from jwk");
     
     // Include the digest of the public key in the credential subject.
     // It is necessary to specify which key has been verified by the issuer
