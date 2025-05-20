@@ -23,7 +23,7 @@ use std::{collections::HashMap, str::FromStr};
 use identity_ecdsa_verifier::EcDSAJwsVerifier;
 
 /*
-    The following example simulates the phases required to implement the trust triangle. The process has been customized to exploit TPM unique functionalities.
+    This example simulates the phases required to implement the trust triangle. The process has been customized to exploit TPM unique functionalities.
     It proceeds as follows:
     1. Holder requests a Verifiable Credential to a credential Issuer
     2. The Issuer verifies the identity of the requester through a cryptographic challange. It can only be solved by a unique TPM device.
@@ -114,22 +114,20 @@ async fn main(){
     examples::check_public_attributes(&key_public_object)
         .expect("Key validation failed");
 
+    let jwk = holder_document.methods(None)[0].data().public_key_jwk().expect("Not a jwk");
     let parameters = jwk.try_ec_params().ok()
         .expect("Cannot find parameters");
 
     let x = decode_b64(parameters.x.as_bytes()).expect("Cannot decode jwk ec parameters");
     let y = decode_b64(parameters.y.as_bytes()).expect("Cannot decode jwk ec parameters");
-    
+
     // check that the public template name corresponds to the name kid included in the did document
-    examples::check_public_key(&key_public_object, &kid, &x, &y)
-        .expect("Key verification failed");
-    
-    // Set the credential subject
-    let jwk = holder_document.methods(None)[0].data().public_key_jwk().expect("Not a jwk");
     let kid = jwk.kid()
         .and_then(|name| decode_b64(name).ok())
         .expect("Cannot decode key identifier from jwk");
-    
+    examples::check_public_key(&key_public_object, &kid, &x, &y)
+        .expect("Key verification failed");
+
     // Include the digest of the public key in the credential subject.
     // It is necessary to specify which key has been verified by the issuer
     let subject = Subject::from_json_value(

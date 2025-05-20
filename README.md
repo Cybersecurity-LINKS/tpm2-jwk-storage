@@ -1,10 +1,10 @@
 # tpm2-jwk-storage
 This library uses the TPM 2.0 as a key management system for [IOTA Identity](https://github.com/iotaledger/identity.rs). 
 
-The library connects to the device using the TPM Software Stack 2.0. It creates asymetric cryptographic keys used to provide proofs for SSI. In addition, it also uses `activate_credential` solve TPM-specific challenges provided by the credential issuer.
+The library connects to the device using the TPM Software Stack 2.0. It creates asymetric cryptographic keys used to provide proofs for the self-sovereign identity (SSI) model. In addition, it also uses `activate_credential` solve TPM-specific challenges provided by the credential issuer.
 
 ## Prerequisites
-[TPM Software Stack 2.0](https://github.com/tpm2-software/tpm2-tss) is required to use the library. The library also requires a resource manager in order to work correctly. Therefore, it may be necessary to install [TPM2 Access Broker & Resource Manager](https://github.com/tpm2-software/tpm2-abrmd)
+[TPM Software Stack 2.0](https://github.com/tpm2-software/tpm2-tss) is required to use the library. It also requires a resource manager in order to work correctly; therefore, it may be necessary to install [TPM2 Access Broker & Resource Manager](https://github.com/tpm2-software/tpm2-abrmd)
 ## Setup
 Include the library in the `Cargo.toml` of your project
 ```toml
@@ -14,7 +14,7 @@ tpm2-jwk-storage = {git = "https://github.com/Cybersecurity-LINKS/tpm2-jwk-stora
 ## Usage
 Example are available in the [example package](./examples/). 
 
-The `TpmVault` struct is provided. It exposes necessary method to support the life cycle of a self sovereign identity. It also implements the `JwkStorage` interface from IOTA Identity Framework so that it can be used as a key storage for the IOTA library.
+The `TpmVault` struct is provided. It exposes necessary methods to support the operations involved in the SSI model. It also implements the `JwkStorage` trait from IOTA Identity Framework so that it can be used as a key storage for the IOTA Identity library.
 
 ```rust
 // Copyright 2025 Fondazione LINKS
@@ -42,7 +42,7 @@ use std::{collections::HashMap, str::FromStr};
 use identity_ecdsa_verifier::EcDSAJwsVerifier;
 
 /*
-    The following example simulates the phases required to implement the trust triangle. The process has been customized to exploit TPM unique functionalities.
+    This example simulates the phases required to implement the trust triangle. The process has been customized to exploit TPM unique functionalities.
     It proceeds as follows:
     1. Holder requests a Verifiable Credential to a credential Issuer
     2. The Issuer verifies the identity of the requester through a cryptographic challange. It can only be solved by a unique TPM device.
@@ -133,23 +133,20 @@ async fn main(){
     examples::check_public_attributes(&key_public_object)
         .expect("Key validation failed");
 
-
-    // Set the credential subject
     let jwk = holder_document.methods(None)[0].data().public_key_jwk().expect("Not a jwk");
-    let kid = jwk.kid()
-        .and_then(|name| decode_b64(name).ok())
-        .expect("Cannot decode key identifier from jwk");
-
     let parameters = jwk.try_ec_params().ok()
         .expect("Cannot find parameters");
 
     let x = decode_b64(parameters.x.as_bytes()).expect("Cannot decode jwk ec parameters");
     let y = decode_b64(parameters.y.as_bytes()).expect("Cannot decode jwk ec parameters");
-    
+
     // check that the public template name corresponds to the name kid included in the did document
+    let kid = jwk.kid()
+        .and_then(|name| decode_b64(name).ok())
+        .expect("Cannot decode key identifier from jwk");
     examples::check_public_key(&key_public_object, &kid, &x, &y)
         .expect("Key verification failed");
-    
+
     // Include the digest of the public key in the credential subject.
     // It is necessary to specify which key has been verified by the issuer
     let subject = Subject::from_json_value(
