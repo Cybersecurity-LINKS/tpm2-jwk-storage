@@ -1,0 +1,56 @@
+[package]
+name = "examples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tpm2-jwk-storage ={ path = "../tpm2_jwk_storage"}
+identity_iota = {version = "1.5.1", default-features = false, features = ["memstore"]}
+identity_ecdsa_verifier = { version = "1.5.1", features = ["es256"]}
+identity_eddsa_verifier = { version = "1.5.1"}
+iota-sdk = { version = "1.0", default-features = false, features = ["tls", "client"] }
+tokio = { version = "1.45", default-features = false, features = ["rt", "macros"]}
+serde = {version = "1.0.219", default-features = false, features = ["derive"]}
+csv = "1.3.1"
+rand = "0.9.1"
+reqwest = {version = "0.12.15", features = ["json","multipart"]}
+serde_json = "1.0.140"
+josekit = "0.10.1"
+
+tss-esapi = {workspace = true, optional = true}
+sha2.workspace = true
+
+[features]
+default = ["tpm"]
+
+tpm = ["dep:tss-esapi"]
+
+[lib]
+path = "utils/utils.rs"
+
+[[example]]
+path = "create_vp.rs"
+name = "create_vp"
+
+####################
+#    BENCHMARKS    #
+####################
+[[example]]
+path = "./benchmarks/keygen.rs"
+name = "keygen"
+
+[[example]]
+path = "./benchmarks/diddoc.rs"
+name = "diddoc"
+
+[[example]]
+path = "./benchmarks/vc_issuance_1rtt.rs"
+name = "vc_1rtt"
+
+[[example]]
+path = "./benchmarks/vc_issuance_2rtt.rs"
+name = "vc_2rtt"
+
+[[example]]
+path = "./benchmarks/send_vp.rs"
+name = "send_vp"

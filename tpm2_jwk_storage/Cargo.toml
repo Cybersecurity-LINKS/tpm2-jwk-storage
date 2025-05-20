@@ -1,0 +1,17 @@
+[package]
+name = "tpm2-jwk-storage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha2.workspace = true
+thiserror = "2.0.12"
+identity_iota = {version = "1.5.1", optional = true}
+async-trait = {version = "0.1.88", optional = true}
+zeroize = {version = "1.8.1", optional = true}
+tss-esapi ={ workspace = true, optional = true}
+
+[features]
+tpm = ["dep:tss-esapi", "dep:zeroize"]
+iota = ["identity_iota", "async-trait"]
+default = ["tpm", "iota"]

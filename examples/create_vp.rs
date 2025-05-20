@@ -1,22 +1,3 @@
-# tpm2-jwk-storage
-This library uses the TPM 2.0 as a key management system for [IOTA Identity](https://github.com/iotaledger/identity.rs). 
-
-The library connects to the device using the TPM Software Stack 2.0. It creates asymetric cryptographic keys used to provide proofs for the self-sovereign identity (SSI) model. In addition, it also uses `activate_credential` solve TPM-specific challenges provided by the credential issuer.
-
-## Prerequisites
-[TPM Software Stack 2.0](https://github.com/tpm2-software/tpm2-tss) is required to use the library. It also requires a resource manager in order to work correctly; therefore, it may be necessary to install [TPM2 Access Broker & Resource Manager](https://github.com/tpm2-software/tpm2-abrmd)
-## Setup
-Include the library in the `Cargo.toml` of your project
-```toml
-[dependencies]
-tpm2-jwk-storage = {git = "https://github.com/Cybersecurity-LINKS/tpm2-jwk-storage"}
-```
-## Usage
-Example are available in the [example package](./examples/). 
-
-The `TpmVault` struct is provided. It exposes necessary methods to support the operations involved in the SSI model. It also implements the `JwkStorage` trait from IOTA Identity Framework so that it can be used as a key storage for the IOTA Identity library.
-
-```rust
 // Copyright 2025 Fondazione LINKS
  
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -271,4 +252,3 @@ async fn main(){
 
   println!("VP successfully validated: {:#?}", presentation);
 }
-```
