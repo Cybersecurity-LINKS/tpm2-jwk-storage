@@ -28,6 +28,9 @@ use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultCon
 
 #[tokio::main]
 async fn main(){
+
+    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
+
     let client: Client = Client::builder()
     .with_primary_node(API_ENDPOINT, None)
     .expect("Client configuration failed")

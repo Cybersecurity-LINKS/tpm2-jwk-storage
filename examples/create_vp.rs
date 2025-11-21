@@ -33,6 +33,7 @@ use identity_ecdsa_verifier::EcDSAJwsVerifier;
  */
 #[tokio::main]
 async fn main(){
+    env_logger::init();
     // Setup the IOTA client
     let client: Client = Client::builder()
         .with_primary_node(API_ENDPOINT, None)
