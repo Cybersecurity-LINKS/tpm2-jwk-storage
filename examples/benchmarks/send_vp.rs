@@ -15,20 +15,15 @@
 use std::time::Instant;
 use std::{collections::VecDeque, time::Duration};
 use std::str::FromStr;
-use examples::dtos::{EncryptedCredentialResponse, NonceResponse};
-use examples::{create_did, write_to_csv, StorageType, TestName, API_ENDPOINT, EK_HANDLE, VERIFIER_BASE_URL};
+use examples::dtos::{CredentialReponse, NonceResponse, SimpleCredentialRequestDTO};
+use examples::{create_did, write_to_csv, StorageType, TestName, API_ENDPOINT, VERIFIER_BASE_URL};
 use identity_iota::core::{Timestamp, ToJson};
 use identity_iota::credential::{Jwt, JwtPresentationOptions, Presentation, PresentationBuilder};
 use identity_iota::did::DID;
-use identity_iota::storage::{JwkDocumentExt, JwsSignatureOptions, KeyIdMemstore, KeyIdStorage, KeyType, MethodDigest, Storage};
+use identity_iota::storage::{JwkDocumentExt, JwsSignatureOptions, KeyIdMemstore, KeyType, Storage};
 use identity_iota::verification::jws::JwsAlgorithm;
-use identity_iota::verification::jwu::decode_b64;
 use iota_sdk::client::{secret::SecretManager, Client};
-use josekit::jwe::alg::direct::DirectJweAlgorithm::Dir;
-use reqwest::multipart::{self, Part};
 use serde_json::json;
-use tpm2_jwk_storage::types::output::TpmCredential;
-use tpm2_jwk_storage::types::tpm_key_type::{EcCurve, TpmKeyType};
 use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
 
 #[tokio::main]
@@ -40,40 +35,26 @@ async fn main(){
     .await
     .expect("Connection failed");
 
+    // Create the wallet for DID publication
     let mut mnemonic = Client::generate_mnemonic()
         .and_then(|mnemonic| SecretManager::try_from_mnemonic(mnemonic))
         .expect("Cannot create new secret manager");
+
+    // Create TPM storage
     let config = TpmVaultConfig::from_str("tabrmd").unwrap();
     let storage = Storage::new(TpmVault::new(config), KeyIdMemstore::new());
-    let vault = storage.key_storage();
 
+    // DID publication
     let (_, document, fragment) = create_did(&client, &mut mnemonic, &storage, KeyType::new("P-256"), JwsAlgorithm::ES256).await
         .expect("Publish did failed");
     let did = document.id().to_string();
 
     let mut results_vp_created = VecDeque::<Duration>::with_capacity(100);
     let mut results_vp_finished = VecDeque::<Duration>::with_capacity(100);
-
-    let certificate = vault.ek_certificate(TpmKeyType::EC(EcCurve::P256)).expect("Failed to retrieve certificate");
-
-    let holder_vm = document.methods(None)[0];
-    let holder_key_id = storage
-        .key_id_storage()
-        .get_key_id(&MethodDigest::new(&holder_vm).expect("Incorrect verification method"))
-        .await
-        .expect("Cannot retrieve the key identifier");
-    let tpm_key_id = holder_key_id.try_into().expect("key identifier format NOK");
-    let marshalled_public = vault.get_public(&tpm_key_id)
-        .expect("Public not found");
-
-    let form = multipart::Form::new()
-        .part("ek_cert", Part::bytes(certificate))
-        .part("tpm_key_pub", Part::bytes(marshalled_public))
-        .text("did", did.to_owned());
     
+    // VC request to the issuer
     let client = reqwest::ClientBuilder::new().build().expect("Cannot use http client");
-    let response = client.get("http://127.0.0.1:3213/api/make_credential/complete")
-        .multipart(form)
+    let response = client.get(format!("http://127.0.0.1:3213/api/challenges?did={did}"))
         .send()
         .await
         .expect("Client failed")
@@ -82,26 +63,32 @@ async fn main(){
         .bytes().await
         .expect("Serialization error");
     
-    let response = serde_json::from_slice::<EncryptedCredentialResponse>(&response)
+    let response = serde_json::from_slice::<NonceResponse>(&response)
         .expect("Challenge serialization error");
 
-    let id_obj = decode_b64(response.id_object).expect("Cannot decode the challenge");
-    let enc_sec = decode_b64(response.enc_secret).expect("Cannot decode the challenge");
-
-    let challenge = TpmCredential::new(&id_obj, &enc_sec)
-        .expect("Bad format for challenge");
-
-    // Solve the challenge
-    let credential_encryption_key = vault.activate_credential(EK_HANDLE, tpm_key_id, challenge)
-        .expect("Activate credential failed");
+    // Sign the nonce challenge
+    let signature = document.create_jws(
+        &storage, 
+        &fragment, 
+        response.nonce.as_bytes(),
+        &JwsSignatureOptions::default().nonce(&response.nonce))
+        .await
+        .expect("Cannot sign JWS");
     
-    let decrypter = Dir.decrypter_from_bytes(&credential_encryption_key)
-        .expect("Cannot create decrypter");
-
-    let (payload, _header) = josekit::jwt::decode_with_decrypter(response.enc_jwt.expect("JWE not found"), &decrypter)
-        .expect("Decryption failed");
-    let vc_jwt = payload.claim("vc_jwt")
-        .expect("Verifiable Credential not found in the JWT");
+    let request_body = SimpleCredentialRequestDTO{
+        did: did,
+        nonce: response.nonce,
+        identity_signature: signature.as_str().to_string()
+    };
+    let response = client.post("http://127.0.0.1:3213/api/credentials/iota")
+        .json::<SimpleCredentialRequestDTO>(&request_body)
+        .send()
+        .await
+        .expect("Responce error during credential negotiation")
+        .json::<CredentialReponse>()
+        .await
+        .expect("Parsing error");
+    let vc_jwt = response.vc_jwt;
 
     let mut tx: usize = 0;
     let mut rx: usize = 0;
@@ -113,7 +100,7 @@ async fn main(){
         let expires: Timestamp = Timestamp::now_utc().checked_add(identity_iota::core::Duration::minutes(10)).unwrap();
         //create a new presentation starting from the VC
         let presentation: Presentation<Jwt> = PresentationBuilder::new(document.id().to_url().into(), Default::default())
-            .credential(Jwt::from(vc_jwt.as_str().expect("JWT is not a string")))
+            .credential(Jwt::from(vc_jwt.clone()))
             .build()
             .expect("Cannot create the Verifiable Presentation");
 

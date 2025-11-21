@@ -20,14 +20,9 @@ use serde::{Deserialize, Serialize};
 
 pub mod dtos;
 
-//pub static API_ENDPOINT: &str = "https://api.testnet.shimmer.network";
-//pub static FAUCET_ENDPOINT: &str = "https://faucet.testnet.shimmer.network/api/enqueue";
+pub static API_ENDPOINT: &str = "https://stardust.linksfoundation.com/node1";
+pub static FAUCET_ENDPOINT: &str = "https://stardust.linksfoundation.com/faucet/l1/api/enqueue";
 
-//pub static API_ENDPOINT: &str = "https://stardust.linksfoundation.com/node1";
-//pub static FAUCET_ENDPOINT: &str = "https://stardust.linksfoundation.com/faucet/l1/api/enqueue";
-
-pub static API_ENDPOINT: &str = "https://api.testnet.iotaledger.net";
-pub static FAUCET_ENDPOINT: &str = "https://faucet.testnet.iotaledger.net/api/enqueue";
 
 pub const ISSUER_BASE_URL: &str = "http://127.0.0.1:3213/api";
 pub const VERIFIER_BASE_URL: &str = "http://127.0.0.1:3214/api";
