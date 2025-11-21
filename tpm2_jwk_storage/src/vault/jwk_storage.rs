@@ -82,7 +82,6 @@ impl JwkStorage for TpmVault {
     /// corresponds to `key_id` and additional checks for this in the `sign` implementation are normally not required.
     /// This is however based on the expectation that the key material associated with a given [`KeyId`] is immutable.  
     async fn sign(&self, key_id: &KeyId, data: &[u8], public_key: &Jwk) -> KeyStorageResult<Vec<u8>>{
-        let start = Instant::now();
         // Retrieve key id
         let key_id = key_id.clone().try_into()
             .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::KeyNotFound).with_source(e))?;
@@ -101,7 +100,6 @@ impl JwkStorage for TpmVault {
         self.tpm_sign(&key_id, data, &kid, scheme)
             .map(|signature| signature.value())
             .map_err(|e| KeyStorageError::new(KeyStorageErrorKind::Unspecified).with_source(e))
-        .inspect(|_| log::debug!("Signature completed in {} ms", start.elapsed().as_millis()))
     }
 
     /// Deletes the key identified by `key_id`.
