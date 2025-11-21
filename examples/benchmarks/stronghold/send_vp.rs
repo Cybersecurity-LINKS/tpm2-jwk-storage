@@ -146,6 +146,6 @@ async fn main(){
     }
     
     // Benchmark completed: store results
-    write_to_csv(TestName::VPCreate, StorageType::Memstore, tx, rx, results_vp_created);
-    write_to_csv(TestName::VPFinish, StorageType::Memstore, tx, rx, results_vp_finished);
+    write_to_csv(TestName::VPCreate, StorageType::Stronghold, tx, rx, results_vp_created);
+    write_to_csv(TestName::VPFinish, StorageType::Stronghold, tx, rx, results_vp_finished);
 }
