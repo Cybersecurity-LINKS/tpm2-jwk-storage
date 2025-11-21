@@ -8,6 +8,7 @@ tpm2-jwk-storage ={ path = "../tpm2_jwk_storage"}
 identity_iota = {version = "1.5.1", default-features = false, features = ["memstore"]}
 identity_ecdsa_verifier = { version = "1.5.1", features = ["es256"]}
 identity_eddsa_verifier = { version = "1.5.1"}
+identity_stronghold = { version = "1.5.1"}
 iota-sdk = { version = "1.0", default-features = false, features = ["tls", "client"] }
 tokio = { version = "1.45", default-features = false, features = ["rt", "macros"]}
 serde = {version = "1.0.219", default-features = false, features = ["derive"]}
@@ -54,3 +55,11 @@ name = "vc_2rtt"
 [[example]]
 path = "./benchmarks/send_vp.rs"
 name = "send_vp"
+
+[[example]]
+path = "./benchmarks/memstore/send_vp.rs"
+name = "memstore_send_vp"
+
+[[example]]
+path = "./benchmarks/stronghold/send_vp.rs"
+name = "stronghold_send_vp"
