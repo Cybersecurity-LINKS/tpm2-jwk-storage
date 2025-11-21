@@ -69,6 +69,7 @@ pub enum TestName{
     VcIssuance,
     VcIssuanceComplete,
     VPCreate,
+    VPSign,
     VPFinish
 }
 

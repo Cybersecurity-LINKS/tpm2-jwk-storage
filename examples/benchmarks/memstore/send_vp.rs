@@ -47,6 +47,7 @@ async fn main(){
     let did = document.id().to_string();
 
     let mut results_vp_created = VecDeque::<Duration>::with_capacity(100);
+    let mut results_vp_sign = VecDeque::<Duration>::with_capacity(100);
     let mut results_vp_finished = VecDeque::<Duration>::with_capacity(100);
     
     // VC request to the issuer
@@ -109,7 +110,8 @@ async fn main(){
         
         let nonce = serde_json::from_slice::<NonceResponse>(&nonce)
             .expect("Cannot read nonce");
-        
+
+        let before_sign = start.elapsed();
         let presentation_jwt = document
         .create_presentation_jwt(
             &presentation,
@@ -119,6 +121,7 @@ async fn main(){
             &JwtPresentationOptions::default().expiration_date(expires))
         .await
         .expect("Verifiable presentation creation failed");
+        let after_sign = start.elapsed();
 
         let vp_created_duration = start.elapsed();
         let start = Instant::now();
@@ -133,10 +136,12 @@ async fn main(){
             .expect("Response error");
         let elapsed = start.elapsed();
         results_vp_created.push_front(vp_created_duration);
+        results_vp_sign.push_front(after_sign-before_sign);
         results_vp_finished.push_front(elapsed);
     }
     
     // Benchmark completed: store results
     write_to_csv(TestName::VPCreate, StorageType::Memstore, tx, rx, results_vp_created);
+    write_to_csv(TestName::VPSign, StorageType::Memstore, tx, rx, results_vp_sign);
     write_to_csv(TestName::VPFinish, StorageType::Memstore, tx, rx, results_vp_finished);
 }
