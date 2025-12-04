@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, sync::RwLock, time::Instant};
 
+use log::debug;
 use tss_esapi::{abstraction::AsymmetricAlgorithmSelection, attributes::{ObjectAttributes, SessionAttributesBuilder}, constants::SessionType, handles::{AuthHandle, PersistentTpmHandle, SessionHandle, TpmHandle}, interface_types::{algorithm::{HashingAlgorithm, PublicAlgorithm}, ecc::EccCurve, reserved_handles::Hierarchy, session_handles::PolicySession}, structures::{Digest, EccParameter, EccPoint, EccScheme, HashScheme, Name, PublicBuilder, PublicEccParametersBuilder, SignatureScheme, SymmetricDefinition}, traits::Marshall, utils::PublicKey, Context};
 use zeroize::Zeroizing;
 
@@ -135,12 +136,15 @@ impl TpmVault{
 
        // 2. Create the Primary Key Object on the TPM
        let mut ctx = self.connect()?;
+       let start = Instant::now();
        let primary = ctx.execute_with_nullauth_session(|context|{
             context.create_primary(Hierarchy::Owner, public_template, None, None, None, None)
        })?;
-
+       let export_context = Instant::now();
+       debug!("Signing key created in {} ms", export_context.duration_since(start).as_millis());
        // 3. Export the context and save in the in-memory cache
        let saved = ctx.context_save(primary.key_handle.into())?;
+       debug!("Context export completed in {} ms", export_context.elapsed().as_millis());
 
        let mut cache = self.cache.write().unwrap(); // should never be in error state. Ok to panic
        cache.insert(key_id.as_str().to_owned(), TpmCacheRecord::new(saved, primary.out_public.clone()));
@@ -195,8 +199,9 @@ impl TpmVault{
 
         // Connect to the TPM and load the key
         let mut ctx = self.connect()?;
+        let start = Instant::now();
         let handle = ctx.context_load(saved_key.context())?;
-
+        debug!("Context loaded in {} ms", start.elapsed().as_millis());
         let signature = ctx.execute_with_nullauth_session(|context| {
             // Verify that the key is correct, checking the object name
             let obj_name = context.tr_get_name(handle)?;
@@ -204,9 +209,10 @@ impl TpmVault{
             if name.ne(obj_name.value()){
                 return Err(TpmVaultError::SignatureError("Name does not match".to_owned()));
             }
-
+            let signature_start = Instant::now();
             // Sign with the loaded object
             Ok(context.sign(handle.into(), Digest::from_bytes(&digest)?, scheme, None)?)
+            .inspect(|_| debug!("Signature completed in {} ms", signature_start.elapsed().as_millis()))
         })?;
 
         Ok(TryInto::<TpmSignature>::try_into(signature)?)
@@ -307,8 +313,11 @@ impl TpmVault{
     }
     /// Create a new Context using the configuration provided.
     fn connect(&self) -> Result<Context, TpmVaultError>{
-        Context::new(self.config.clone())
-            .map_err(|e| TpmVaultError::ConnectionError(e))
+        let start = Instant::now();
+        let ctx = Context::new(self.config.clone())
+            .map_err(|e| TpmVaultError::ConnectionError(e));
+        debug!("Context created in {} ms", start.elapsed().as_millis());
+        ctx
     }
 
     /*-------------------------

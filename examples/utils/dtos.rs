@@ -19,6 +19,14 @@ pub struct NonceResponse{
     pub nonce: String
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SimpleCredentialRequestDTO {
+    pub did: String,
+    pub nonce: String,
+    pub identity_signature: String
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CredentialReponse {

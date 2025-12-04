@@ -21,6 +21,7 @@ use std::str::FromStr;
 
 #[tokio::main]
 async fn main() {
+    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
     // Setup phase:
     // Create a key storage
     let config = TpmVaultConfig::from_str("tabrmd").unwrap();

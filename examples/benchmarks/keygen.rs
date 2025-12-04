@@ -22,6 +22,7 @@ use std::str::FromStr;
 #[tokio::main]
 async fn main() {
 
+    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
     let mut results = VecDeque::<Duration>::with_capacity(100);
     let config = TpmVaultConfig::from_str("tabrmd").unwrap();
     let storage = TpmVault::new(config);

@@ -14,23 +14,21 @@
 
 use std::time::Instant;
 use std::{collections::VecDeque, time::Duration};
-use std::str::FromStr;
 use examples::dtos::{CredentialReponse, NonceResponse, SimpleCredentialRequestDTO};
 use examples::{create_did, write_to_csv, StorageType, TestName, API_ENDPOINT, VERIFIER_BASE_URL};
 use identity_iota::core::{Timestamp, ToJson};
 use identity_iota::credential::{Jwt, JwtPresentationOptions, Presentation, PresentationBuilder};
 use identity_iota::did::DID;
-use identity_iota::storage::{JwkDocumentExt, JwsSignatureOptions, KeyIdMemstore, KeyType, Storage};
+use identity_iota::storage::{JwkDocumentExt, JwsSignatureOptions, KeyType, Storage};
 use identity_iota::verification::jws::JwsAlgorithm;
+use identity_stronghold::StrongholdStorage;
+use iota_sdk::client::Password;
+use iota_sdk::client::stronghold::StrongholdAdapterBuilder;
 use iota_sdk::client::{secret::SecretManager, Client};
 use serde_json::json;
-use tpm2_jwk_storage::vault::{tpm_vault::TpmVault, tpm_vault_config::TpmVaultConfig};
 
 #[tokio::main]
 async fn main(){
-
-    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
-
     let client: Client = Client::builder()
     .with_primary_node(API_ENDPOINT, None)
     .expect("Client configuration failed")
@@ -43,12 +41,17 @@ async fn main(){
         .and_then(|mnemonic| SecretManager::try_from_mnemonic(mnemonic))
         .expect("Cannot create new secret manager");
 
-    // Create TPM storage
-    let config = TpmVaultConfig::from_str("tabrmd").unwrap();
-    let storage = Storage::new(TpmVault::new(config), KeyIdMemstore::new());
+    // Create Stronghold storage
+    let stronghold = StrongholdAdapterBuilder::default()
+        .password(Password::from("value".to_string()))
+        .build("tmp.stronghold")
+        .map(|s| StrongholdStorage::new(s))
+        .expect("Cannot build stronghold vault");
+
+    let storage = Storage::new(stronghold.clone(), stronghold);
 
     // DID publication
-    let (_, document, fragment) = create_did(&client, &mut mnemonic, &storage, KeyType::new("P-256"), JwsAlgorithm::ES256).await
+    let (_, document, fragment) = create_did(&client, &mut mnemonic, &storage, KeyType::new("Ed25519"), JwsAlgorithm::EdDSA).await
         .expect("Publish did failed");
     let did = document.id().to_string();
 
@@ -116,7 +119,6 @@ async fn main(){
         
         let nonce = serde_json::from_slice::<NonceResponse>(&nonce)
             .expect("Cannot read nonce");
-        
         let before_sign = start.elapsed();
         let presentation_jwt = document
         .create_presentation_jwt(
@@ -147,7 +149,7 @@ async fn main(){
     }
     
     // Benchmark completed: store results
-    write_to_csv(TestName::VPCreate, StorageType::Tpm, tx, rx, results_vp_created);
-    write_to_csv(TestName::VPSign, StorageType::Tpm, tx, rx, results_vp_sign);
-    write_to_csv(TestName::VPFinish, StorageType::Tpm, tx, rx, results_vp_finished);
+    write_to_csv(TestName::VPCreate, StorageType::Stronghold, tx, rx, results_vp_created);
+    write_to_csv(TestName::VPSign, StorageType::Stronghold, tx, rx, results_vp_sign);
+    write_to_csv(TestName::VPFinish, StorageType::Stronghold, tx, rx, results_vp_finished);
 }
